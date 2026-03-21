@@ -1812,40 +1812,29 @@ with tab5:
 import streamlit as st
 import json
 import os
-import threading  # 新增：文件锁，防止并发读写冲突
+import threading
 
-# ==================== 跨设备可见核心配置（新增，不影响原有代码） ====================
-# 共享数据文件（所有设备都读写这个文件）
+# ==================== 跨设备持久化核心 ====================
 RESOURCES_FILE = "psychology_resources.json"
-# 全局文件锁：防止多设备/多线程同时读写冲突
 file_lock = threading.Lock()
 
-# 核心：每次都从文件重新加载最新数据（跨设备可见关键）
 def load_shared_resources():
-    """每次调用都读取磁盘文件，保证所有设备拿到最新数据"""
     with file_lock:
         if os.path.exists(RESOURCES_FILE):
             try:
                 with open(RESOURCES_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    # 确保数据结构完整
                     default_data = {
                         "psychological_course": [],
                         "psychological_activity": [],
                         "psychological_test": [],
                         "online_resources": []
                     }
-                    return {**default_data, **data}  # 合并默认和存储数据
+                    return {**default_data, **data}
             except Exception as e:
                 st.error(f"加载资源数据出错: {e}")
-                return {
-                    "psychological_course": [],
-                    "psychological_activity": [],
-                    "psychological_test": [],
-                    "online_resources": []
-                }
+                return default_data
         else:
-            # 文件不存在时初始化空数据
             return {
                 "psychological_course": [],
                 "psychological_activity": [],
@@ -1854,7 +1843,6 @@ def load_shared_resources():
             }
 
 def save_shared_resources(data):
-    """保存数据到文件，所有设备立即可见"""
     with file_lock:
         try:
             with open(RESOURCES_FILE, "w", encoding="utf-8") as f:
@@ -1862,187 +1850,182 @@ def save_shared_resources(data):
         except Exception as e:
             st.error(f"保存资源数据失败: {e}")
 
-# ==================== 原有函数适配（不修改逻辑，仅替换数据源） ====================
-def get_combined_resources():
-    """原有函数，仅数据源改为共享文件"""
-    system_resources = {
-        "psychological_course": [],
-        "psychological_activity": [],
-        "psychological_test": [],
-        "online_resources": []
+# ==================== 配置数据（系统内置资源） ====================
+DLPU_CONSULT_SERVICE = {
+    "service_object": "大连工业大学全体在校本科生、研究生、教职工",
+    "service_type": [
+        "个体咨询：一对一的专业心理咨询服务，每次50分钟左右，涵盖情绪调节、压力管理、人际交往、学业困难、恋爱心理、生涯规划等多个领域",
+        "团体辅导：针对特定主题的小组心理辅导（如人际关系提升、压力管理、情绪调节、新生适应、毕业生就业心理等），每组8-12人，周期4-8次",
+        "心理测评：提供专业的心理量表测评（包括焦虑、抑郁、压力、人格、人际关系、生涯规划等），帮助学生了解自身心理状态",
+        "危机干预：针对自杀倾向、自伤行为、严重情绪崩溃等心理危机事件的紧急干预与支持，24小时响应",
+        "心理健康讲座：面向全校开展的心理健康科普讲座（如情绪管理、压力应对、恋爱心理、生涯规划等）"
+    ],
+    "reservation_method": [
+        "线上预约：通过大连工业大学云工大心理咨询预约",
+        "线下预约：门诊部303、304房间登记预约",
+        "电话预约：0411-8618792（工作日8:30-11:30，13:30-17:00）",
+        "紧急情况：可直接前往心理健康教育中心，或第一时间联系辅导员/班主任、学院副书记，也可拨打学校24小时值班电话"
+    ],
+    "consult_address": "门诊部303、304房间",
+    "consult_time": "周一至周五：8:30-11:30，13:30-17:00（寒暑假及法定节假日另行通知，紧急情况除外）",
+    "service_principle": [
+        "保密原则：咨询内容严格保密，未经来访者同意，不得向任何第三方泄露（法律规定的特殊情况除外，如涉及自杀、自伤、伤害他人等）",
+        "自愿原则：来访者自愿参与咨询，可根据自身情况随时终止咨询",
+        "中立原则：咨询师保持客观中立的态度，不评判来访者的想法、行为和价值观",
+        "专业原则：严格遵循心理咨询专业伦理规范，提供科学、专业的心理服务",
+        "免费原则：学校心理健康教育中心所有咨询服务、测评、讲座、工作坊等均为免费提供"
+    ],
+    "notice": "1. 首次咨询需提前1-3天预约，预约成功后请按时前往，若无法按时前往请提前24小时取消预约；2. 咨询时请携带学生证或校园卡以便登记；3. 心理咨询是一个专业的助人过程，需要来访者与咨询师的共同配合，建议保持开放的心态参与；4. 若需心理测评，可在预约时说明，测评后将提供专业的结果解读。"
+}
+
+DLPU_PSYCHOLOGY_RESOURCES = {
+    "psychological_course": [
+        "《大学生心理健康教育》- 全校公共必修课（1学分），覆盖心理健康基础知识、情绪管理、压力应对、人际交往、生涯规划等内容"
+    ],
+    "psychological_activity": [],
+    "psychological_test": [
+        "症状自评量表（SCL-90）：全面评估心理健康状况，包括躯体化、强迫、人际关系敏感、抑郁、焦虑等9个维度",
+        "焦虑自评量表（SAS）：评估焦虑情绪的严重程度",
+        "抑郁自评量表（SDS）：评估抑郁情绪的严重程度",
+        "压力知觉量表（PSS）：评估个体感受到的压力水平",
+        "人际关系综合诊断量表：评估人际交往中的困扰程度",
+        "艾森克人格问卷（EPQ）：评估人格特质（内外向、神经质、精神质、掩饰性）",
+        "霍兰德职业兴趣测试：帮助学生了解自身职业兴趣类型，为生涯规划提供参考"
+    ],
+    "crisis_hotline": {
+        "school_hotline": "0411-86318792（工作日8:30-11:30，13:30-17:00）",
+        "school_24h_hotline": "0411-86323110（学校24小时值班电话，紧急情况拨打）",
+        "dalian_hotline": "0411-84651333（大连市24小时心理危机干预热线）",
+        "provincial_hotline": "400-709-2009（辽宁省心理危机干预热线，24小时）",
+        "national_hotline": "400-1619995（全国24小时心理危机干预热线）"
+    },
+    "online_resources": []
+}
+
+DLPU_PSYCHOLOGY_SCIENCE = {
+    "common_problems": [
+        {
+            "title": "大学生常见心理问题及应对",
+            "content": "大学生常见的心理问题包括：适应障碍（新生入学适应、环境适应）、学业压力、人际交往困扰、情绪调节问题（焦虑、抑郁、愤怒）、恋爱心理问题、生涯规划迷茫、家庭关系冲突等。应对建议：1. 主动了解心理健康知识，提升自我调适能力；2. 积极参与校园活动，拓展人际交往；3. 遇到问题及时向辅导员、同学、家人倾诉；4. 必要时寻求专业心理咨询帮助。"
+        },
+        {
+            "title": "焦虑情绪的识别与调节",
+            "content": "焦虑情绪的常见表现：心理上（紧张、担忧、烦躁、注意力不集中）、生理上（心跳加快、呼吸急促、头晕、失眠、食欲不振）、行为上（坐立不安、拖延、回避）。调节方法：1. 呼吸放松法（4-7-8呼吸法、腹式呼吸）；2. 正念冥想，专注当下；3. 认知重构，调整负面思维；4. 适当运动，释放压力；5. 合理规划时间，避免过度压力。"
+        },
+        {
+            "title": "抑郁情绪的识别与应对",
+            "content": "抑郁情绪的常见表现：持续情绪低落、兴趣减退、精力下降、自我评价降低、睡眠障碍（失眠或嗜睡）、食欲改变、注意力不集中、有自杀念头等。应对建议：1. 及时寻求专业帮助（心理咨询、心理治疗、药物治疗）；2. 保持规律作息和饮食；3. 适当参与户外活动和社交；4. 做一些能带来成就感的小事；5. 避免独处过久，多与他人交流。"
+        },
+        {
+            "title": "人际交往困扰的解决方法",
+            "content": "大学生人际交往困扰主要表现为：社交恐惧、人际冲突、孤独感、缺乏沟通技巧等。解决方法：1. 提升沟通技巧，学会倾听和表达；2. 尊重他人，换位思考；3. 主动参与社交活动，逐步克服社交恐惧；4. 遇到人际冲突时，冷静沟通，避免指责；5. 接纳自己的社交风格，不必强求完美。"
+        }
+    ],
+    "mental_health_tips": [
+        "保持规律作息：充足的睡眠是心理健康的基础，建议每天睡眠7-8小时，避免熬夜。",
+        "合理饮食：均衡营养，多吃蔬菜水果、全谷物、优质蛋白质，少吃辛辣刺激、高糖高脂食物。",
+        "坚持运动：每周进行3次以上有氧运动（跑步、游泳、瑜伽、打球等），每次30分钟以上，促进多巴胺分泌，改善情绪。",
+        "学会情绪表达：不要压抑情绪，可通过倾诉、写日记、绘画、听音乐等方式释放情绪。",
+        "培养兴趣爱好：参与自己喜欢的活动（如读书、绘画、音乐、摄影、志愿服务等），丰富课余生活，提升幸福感。",
+        "建立支持系统：与家人、朋友、同学保持良好沟通，遇到问题时能获得情感支持。",
+        "避免过度使用电子产品：减少手机、电脑使用时间，多进行面对面交流和户外活动。",
+        "学会自我接纳：接受自己的不完美，关注自身优点，避免过度自我批评。"
+    ],
+    "crisis_identification": {
+        "title": "心理危机的识别与应对",
+        "content": "心理危机的常见信号：1. 言语上：经常说'活着没意思''想自杀''不想活了'等消极言论；2. 行为上：突然与他人疏远、整理物品、赠送礼物、自伤行为、情绪剧烈波动；3. 情绪上：持续抑郁、焦虑、愤怒、麻木不仁；4. 生活上：突然改变作息、饮食，放弃兴趣爱好，学业/工作表现急剧下降。应对方法：1. 保持冷静，主动关心，倾听其感受，不要评判；2. 不要离开其身边，确保其安全；3. 及时联系辅导员、学校心理健康教育中心、家人或拨打危机干预热线；4. 不要让其单独待在封闭空间，移除可能的危险物品。"
     }
-    # 读取共享文件的最新数据
-    custom_res = load_shared_resources()
+}
+
+# ==================== 会话状态初始化 ====================
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False  # 默认游客，可根据登录逻辑修改
+if "custom_psychology_resources" not in st.session_state:
+    st.session_state.custom_psychology_resources = load_shared_resources()
+
+# ==================== 合并系统资源+自定义资源 ====================
+def get_combined_resources():
+    system_resources = {
+        "psychological_course": DLPU_PSYCHOLOGY_RESOURCES["psychological_course"],
+        "psychological_activity": DLPU_PSYCHOLOGY_RESOURCES["psychological_activity"],
+        "psychological_test": DLPU_PSYCHOLOGY_RESOURCES["psychological_test"],
+        "online_resources": DLPU_PSYCHOLOGY_RESOURCES["online_resources"]
+    }
+    custom_res = st.session_state.custom_psychology_resources
     combined = {}
     for key in system_resources:
         combined[key] = system_resources[key] + custom_res.get(key, [])
     return combined
 
-# ==================== 管理员权限判断（复用你示例中的session_state） ====================
+# ==================== 权限判断 ====================
 def is_admin():
     return st.session_state.get("is_admin", False)
 
-# ==================== 模拟配置数据（修复括号不匹配问题） ====================
-if "DLPU_CONSULT_SERVICE" not in st.session_state:
-    st.session_state.DLPU_CONSULT_SERVICE = {
-        "service_object": "大连工业大学全体在校本科生、研究生、教职工",
-        "service_type": [
-            "个体咨询：一对一的专业心理咨询服务，每次50分钟左右，涵盖情绪调节、压力管理、人际交往、学业困难、恋爱心理、生涯规划等多个领域",
-            "团体辅导：针对特定主题的小组心理辅导（如人际关系提升、压力管理、情绪调节、新生适应、毕业生就业心理等），每组8-12人，周期4-8次",
-            "心理测评：提供专业的心理量表测评（包括焦虑、抑郁、压力、人格、人际关系、生涯规划等），帮助学生了解自身心理状态",
-            "危机干预：针对自杀倾向、自伤行为、严重情绪崩溃等心理危机事件的紧急干预与支持，24小时响应",
-            "心理健康讲座：面向全校开展的心理健康科普讲座（如情绪管理、压力应对、恋爱心理、生涯规划等）"
-        ],
-        "reservation_method": [
-            "线上预约：通过大连工业大学云工大心理咨询预约",
-            "线下预约：门诊部303、304房间登记预约",
-            "电话预约：0411-8618792（工作日8:30-11:30，13:30-17:00）",
-            "紧急情况：可直接前往心理健康教育中心，或第一时间联系辅导员/班主任、学院副书记，也可拨打学校24小时值班电话"
-        ],
-        "consult_address": "门诊部303、304房间",
-        "consult_time": "周一至周五：8:30-11:30，13:30-17:00（寒暑假及法定节假日另行通知，紧急情况除外）",
-        "service_principle": [
-            "保密原则：咨询内容严格保密，未经来访者同意，不得向任何第三方泄露（法律规定的特殊情况除外，如涉及自杀、自伤、伤害他人等）",
-            "自愿原则：来访者自愿参与咨询，可根据自身情况随时终止咨询",
-            "中立原则：咨询师保持客观中立的态度，不评判来访者的想法、行为和价值观",
-            "专业原则：严格遵循心理咨询专业伦理规范，提供科学、专业的心理服务",
-            "免费原则：学校心理健康教育中心所有咨询服务、测评、讲座、工作坊等均为免费提供"
-        ],
-        "notice": "心理咨询是专业的心理支持服务，如有需要请及时预约。保护隐私，专业守护！"
-    }
-
-if "DLPU_PSYCHOLOGY_RESOURCES" not in st.session_state:
-    st.session_state.DLPU_PSYCHOLOGY_RESOURCES = {
-        "crisis_hotline": {
-            "dalian_hotline": "0411-84651333",
-            "provincial_hotline": "400-709-2009",
-            "national_hotline": "400-1619995"
-        }
-    }
-
-if "DLPU_PSYCHOLOGY_SCIENCE" not in st.session_state:
-    st.session_state.DLPU_PSYCHOLOGY_SCIENCE = {
-        "common_problems": [
-            {
-                "title": "大学生常见心理问题及应对",
-                "content": "大学生常见的心理问题包括：适应障碍（新生入学适应、环境适应）、学业压力、人际交往困扰、情绪调节问题（焦虑、抑郁、愤怒）、恋爱心理问题、生涯规划迷茫、家庭关系冲突等。应对建议：1. 主动了解心理健康知识，提升自我调适能力；2. 积极参与校园活动，拓展人际交往；3. 遇到问题及时向辅导员、同学、家人倾诉；4. 必要时寻求专业心理咨询帮助。"
-            },
-            {
-                "title": "焦虑情绪的识别与调节",
-                "content": "焦虑情绪的常见表现：心理上（紧张、担忧、烦躁、注意力不集中）、生理上（心跳加快、呼吸急促、头晕、失眠、食欲不振）、行为上（坐立不安、拖延、回避）。调节方法：1. 呼吸放松法（4-7-8呼吸法、腹式呼吸）；2. 正念冥想，专注当下；3. 认知重构，调整负面思维；4. 适当运动，释放压力；5. 合理规划时间，避免过度压力。"
-            },
-            {
-                "title": "抑郁情绪的识别与应对",
-                "content": "抑郁情绪的常见表现：持续情绪低落、兴趣减退、精力下降、自我评价降低、睡眠障碍（失眠或嗜睡）、食欲改变、注意力不集中、有自杀念头等。应对建议：1. 及时寻求专业帮助（心理咨询、心理治疗、药物治疗）；2. 保持规律作息和饮食；3. 适当参与户外活动和社交；4. 做一些能带来成就感的小事；5. 避免独处过久，多与他人交流。"
-            },
-            {
-                "title": "人际交往困扰的解决方法",
-                "content": "大学生人际交往困扰主要表现为：社交恐惧、人际冲突、孤独感、缺乏沟通技巧等。解决方法：1. 提升沟通技巧，学会倾听和表达；2. 尊重他人，换位思考；3. 主动参与社交活动，逐步克服社交恐惧；4. 遇到人际冲突时，冷静沟通，避免指责；5. 接纳自己的社交风格，不必强求完美。"
-            }
-        ],  # 这里补上了缺失的 ] 和 ，
-        "mental_health_tips": [
-            "保持规律作息：充足的睡眠是心理健康的基础，建议每天睡眠7-8小时，避免熬夜。",
-            "合理饮食：均衡营养，多吃蔬菜水果、全谷物、优质蛋白质，少吃辛辣刺激、高糖高脂食物。",
-            "坚持运动：每周进行3次以上有氧运动（跑步、游泳、瑜伽、打球等），每次30分钟以上，促进多巴胺分泌，改善情绪。",
-            "学会情绪表达：不要压抑情绪，可通过倾诉、写日记、绘画、听音乐等方式释放情绪。",
-            "培养兴趣爱好：参与自己喜欢的活动（如读书、绘画、音乐、摄影、志愿服务等），丰富课余生活，提升幸福感。",
-            "建立支持系统：与家人、朋友、同学保持良好沟通，遇到问题时能获得情感支持。",
-            "避免过度使用电子产品：减少手机、电脑使用时间，多进行面对面交流和户外活动。",
-            "学会自我接纳：接受自己的不完美，关注自身优点，避免过度自我批评。"
-        ],
-        "crisis_identification": {
-            "title": "心理危机的识别与应对",
-            "content": "心理危机的常见信号：1. 言语上：经常说'活着没意思''想自杀''不想活了'等消极言论；2. 行为上：突然与他人疏远、整理物品、赠送礼物、自伤行为、情绪剧烈波动；3. 情绪上：持续抑郁、焦虑、愤怒、麻木不仁；4. 生活上：突然改变作息、饮食，放弃兴趣爱好，学业/工作表现急剧下降。应对方法：1. 保持冷静，主动关心，倾听其感受，不要评判；2. 不要离开其身边，确保其安全；3. 及时联系辅导员、学校心理健康教育中心、家人或拨打危机干预热线；4. 不要让其单独待在封闭空间，移除可能的危险物品。"
-        }
-    }
-
-# 简化引用（和你原有代码保持一致）
-DLPU_CONSULT_SERVICE = st.session_state.DLPU_CONSULT_SERVICE
-DLPU_PSYCHOLOGY_RESOURCES = st.session_state.DLPU_PSYCHOLOGY_RESOURCES
-DLPU_PSYCHOLOGY_SCIENCE = st.session_state.DLPU_PSYCHOLOGY_SCIENCE
-
-# ==================== 你的原有代码：仅新增跨设备保存逻辑，删除重复粘贴 ====================
-with st.container() as tab6:  # 替换为你实际的 tab6 容器
-    # 标签页6：学校咨询服务（包含严格的权限控制）
+# ==================== 页面渲染 ====================
+with st.container() as tab6:
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
     
-    # 初始化自定义资源数据（跨设备核心）
-    if "custom_psychology_resources" not in st.session_state:
-        st.session_state.custom_psychology_resources = load_shared_resources()
-    
-    # 显示当前用户权限状态
+    # 游客/管理员提示
     if is_admin():
-        st.success("👑 管理员模式：您可以管理所有心理资源")
+        st.success("👑 管理员模式：您可以管理所有心理资源（添加/删除自定义资源）")
     else:
-        st.info("👤 游客模式：您只能查看心理资源内容")
+        st.info("💡 提示：您当前以游客身份访问，只能查看资源内容。如需管理权限，请使用管理员账号登录。")
     
     st.markdown("---")
     
     # 服务对象
     st.markdown("### 🎓 服务对象")
-    st.markdown(f">{DLPU_CONSULT_SERVICE['service_object']}")
-    
+    st.markdown(f"{DLPU_CONSULT_SERVICE['service_object']}")
     st.markdown("---")
     
     # 服务类型
     st.markdown("### 📋 服务类型")
     for service in DLPU_CONSULT_SERVICE['service_type']:
         st.markdown(f"- {service}")
-    
     st.markdown("---")
     
     # 预约方式
     st.markdown("### 📱 预约方式")
     for method in DLPU_CONSULT_SERVICE['reservation_method']:
         st.markdown(f"- {method}")
-    
     st.markdown("---")
     
     # 咨询地点和时间
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### 📍 咨询地点")
-        st.markdown(f">{DLPU_CONSULT_SERVICE['consult_address']}")
+        st.markdown(f"{DLPU_CONSULT_SERVICE['consult_address']}")
     with col2:
         st.markdown("### ⏰ 咨询时间")
-        st.markdown(f">{DLPU_CONSULT_SERVICE['consult_time']}")
-    
+        st.markdown(f"{DLPU_CONSULT_SERVICE['consult_time']}")
     st.markdown("---")
     
     # 服务原则
     st.markdown("### 📜 服务原则")
     for principle in DLPU_CONSULT_SERVICE['service_principle']:
         st.markdown(f"- {principle}")
-    
     st.markdown("---")
     
-    # 校园心理资源（严格的权限控制）
+    # 校园心理资源
     st.markdown("### 📚 校园心理资源")
-    
-    # 资源类型选择
     resource_types = {
         "psychological_course": "心理健康课程",
         "psychological_activity": "心理健康活动", 
         "psychological_test": "心理测评工具",
         "online_resources": "线上资源"
     }
-    
     resource_type_to_manage = st.selectbox(
         "选择资源类型",
         list(resource_types.values()),
         key="resource_type_select"
     )
-    
-    # 获取对应的键
     resource_type_key = [k for k, v in resource_types.items() if v == resource_type_to_manage][0]
     
-    # 只有管理员才能看到资源管理功能
+    # 管理员功能区
     if is_admin():
         st.markdown("#### 📝 资源管理（管理员专属）")
-        
-        # 添加资源表单
         with st.form("add_resource_form", clear_on_submit=True):
             new_resource = st.text_area(
                 "新增资源内容", 
@@ -2056,56 +2039,37 @@ with st.container() as tab6:  # 替换为你实际的 tab6 容器
                 clear_form = st.form_submit_button("🗑️ 清空内容", use_container_width=True)
             
             if submit_add and new_resource.strip():
-                # 添加资源到自定义资源列表
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                
-                # 新增：保存到共享文件（跨设备同步）
                 save_shared_resources(st.session_state.custom_psychology_resources)
-                
-                st.success("✅ 资源添加成功！")
+                st.success("✅ 资源添加成功！（已同步到所有设备）")
                 st.rerun()
-        
         st.markdown("---")
         
-        # 显示自定义资源（管理员可以管理）
         st.markdown("#### 🔧 自定义资源管理")
         if (resource_type_key in st.session_state.custom_psychology_resources and 
             st.session_state.custom_psychology_resources[resource_type_key]):
-            
             for idx, resource in enumerate(st.session_state.custom_psychology_resources[resource_type_key]):
                 col_content, col_delete = st.columns([5, 1])
                 with col_content:
                     st.markdown(f"🔹 {resource}")
                 with col_delete:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
-                        # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        
-                        # 新增：保存到共享文件（跨设备同步）
                         save_shared_resources(st.session_state.custom_psychology_resources)
-                        
-                        st.success("✅ 资源已删除！")
+                        st.success("✅ 资源已删除！（已同步到所有设备）")
                         st.rerun()
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
-    else:
-        # 游客只能查看，完全隐藏编辑功能
-        st.markdown("#### 📋 资源查看")
-        st.info("💡 提示：您当前以游客身份访问，只能查看资源内容。如需管理权限，请使用管理员账号登录。")
-    
     st.markdown("---")
     
-    # 显示完整的资源列表（所有用户可见）
+    # 完整资源列表（系统+自定义）
     st.markdown(f"#### 📋 完整的{resource_type_to_manage}列表")
-    
     combined_resources = get_combined_resources()
     all_resources = combined_resources[resource_type_key]
-    
     if all_resources:
         for resource in all_resources:
-            # 标记自定义资源
             is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
                         resource in st.session_state.custom_psychology_resources[resource_type_key])
             icon = "🔹" if is_custom else "📌"
@@ -2113,24 +2077,23 @@ with st.container() as tab6:  # 替换为你实际的 tab6 容器
             st.markdown(f"{icon} {resource} {label}")
     else:
         st.info(f"暂无{resource_type_to_manage}内容")
-    
     st.markdown("---")
     
     # 危机干预热线
     st.markdown("### 🆘 危机干预热线")
-    st.markdown(f"- **学校工作日热线**：0411-86318792（门诊部）")
-    st.markdown(f"- **大连市24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['dalian_hotline']}")
-    st.markdown(f"- **辽宁省24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['provincial_hotline']}")
-    st.markdown(f"- **全国24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['national_hotline']}")
-    
+    st.markdown(f"- 学校工作日热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['school_hotline']}")
+    st.markdown(f"- 学校24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['school_24h_hotline']}")
+    st.markdown(f"- 大连市24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['dalian_hotline']}")
+    st.markdown(f"- 辽宁省24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['provincial_hotline']}")
+    st.markdown(f"- 全国24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['national_hotline']}")
     st.markdown("---")
     
     # 温馨提示
     with st.info("💡 温馨提示"):
         st.markdown(DLPU_CONSULT_SERVICE['notice'])
-    
-    # 新增：心理健康科普
     st.markdown("---")
+    
+    # 心理健康科普
     st.markdown("### 📖 心理健康科普")
     tab6_1, tab6_2, tab6_3 = st.tabs(["常见问题", "健康贴士", "危机识别"])
     with tab6_1:
