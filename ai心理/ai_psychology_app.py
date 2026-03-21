@@ -441,18 +441,21 @@ def init_ai_client():
     )
     return client
 
-# 备选方案：使用SnowNLP（需先安装：pip install snownlp）
-from snownlp import SnowNLP
-
 def analyze_emotion(text):
-    """情感分析：基于SnowNLP的稳定版本"""
+    """情感分析：识别焦虑/积极/中性（修复polarity键缺失问题）"""
     try:
-        s = SnowNLP(text)
-        polarity = round(s.sentiments - 0.5, 2)  # 转换为-0.5~0.5的极性值
+        lm = ps.LM()
+        tokens = lm.tokenize(text)
+        score = lm.get_score(tokens)
         
+        # 修复核心：检查polarity键是否存在，不存在则设默认值0.0
+        polarity = round(score.get('polarity', 0.0), 2)  # 用get方法替代直接取值
+        
+        # 强化焦虑情绪识别（关键词优先，降低对polarity的依赖）
         anxiety_keywords = ["焦虑", "压力大", "睡不着", "烦躁", "紧张", "心慌", "焦虑症", "压抑"]
         is_anxiety = any(word in text for word in anxiety_keywords) or polarity < -0.2
         
+        # 情感类型判断（增加兜底逻辑）
         if is_anxiety:
             emotion = "焦虑/消极"
             st.session_state.show_anxiety_resources = True
@@ -464,9 +467,17 @@ def analyze_emotion(text):
             st.session_state.show_anxiety_resources = False
         
         return emotion, polarity, is_anxiety
+    
+    # 细化异常捕获，避免泛化导致问题隐藏
+    except KeyError as e:
+        st.warning(f"情感分析暂不可用：情感维度 {str(e)} 缺失（已自动降级为中性分析）")
+        return "中性", 0.0, False
+    except AttributeError as e:
+        st.warning(f"情感分析暂不可用：语言模型组件异常 {str(e)}（已自动降级为中性分析）")
+        return "中性", 0.0, False
     except Exception as e:
         st.warning(f"情感分析暂不可用：{str(e)}（已自动降级为中性分析）")
-        return "中性", 0.0, False
+        return "未知", 0.0, False
 
 def get_psychology_prompt():
     """优化提示词：仅保留指定的0411-86318792一个电话"""
