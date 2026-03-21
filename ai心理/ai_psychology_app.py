@@ -1380,16 +1380,64 @@ with tab3:
         st.info("💡 所有测评结果仅供参考，不作为临床诊断。")
 
 # -------------------------- 标签页4：心理咨询预约 --------------------------
+import streamlit as st
+import pandas as pd
+from datetime import date, datetime
+import json
+import os
+
+# ===================== 新增：持久化存储核心函数 =====================
+# 定义存储文件路径
+APPOINTMENT_FILE = "dlpu_appointments.json"
+
+def init_appointment_storage():
+    """初始化预约记录持久化文件（如果不存在则创建）"""
+    if not os.path.exists(APPOINTMENT_FILE):
+        default_data = []
+        with open(APPOINTMENT_FILE, "w", encoding="utf-8") as f:
+            json.dump(default_data, f, ensure_ascii=False, indent=4)
+
+def load_all_appointments():
+    """加载所有预约记录（供管理员使用）"""
+    init_appointment_storage()
+    try:
+        with open(APPOINTMENT_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        st.error(f"加载预约记录失败：{e}")
+        return []
+
+def save_appointment(new_appointment):
+    """保存新预约记录到文件"""
+    all_appointments = load_all_appointments()
+    all_appointments.append(new_appointment)
+    with open(APPOINTMENT_FILE, "w", encoding="utf-8") as f:
+        json.dump(all_appointments, f, ensure_ascii=False, indent=4)
+
+def update_appointment(appointment_id, update_data):
+    """更新指定预约记录（状态/备注/回复）"""
+    all_appointments = load_all_appointments()
+    for idx, record in enumerate(all_appointments):
+        if record["id"] == appointment_id:
+            record.update(update_data)
+            with open(APPOINTMENT_FILE, "w", encoding="utf-8") as f:
+                json.dump(all_appointments, f, ensure_ascii=False, indent=4)
+            return True
+    return False
+
+def get_user_appointments(username):
+    """获取指定用户的预约记录（权限隔离核心）"""
+    all_appointments = load_all_appointments()
+    return [record for record in all_appointments if record["username"] == username]
+
+# ===================== 原有代码 + 持久化改造 =====================
 with tab4:
     st.title("📅 大连工业大学 心理咨询预约系统")
     st.markdown("#### 在线预约学校专业心理咨询服务")
     st.markdown("---")
     
-    # 初始化预约相关会话状态
-    if "appointment_records" not in st.session_state:
-        st.session_state.appointment_records = []
-    if "admin_appointments" not in st.session_state:
-        st.session_state.admin_appointments = []
+    # 初始化持久化存储
+    init_appointment_storage()
     
     # 1. 预约表单（游客/管理员都可预约）
     st.markdown("### 📝 在线预约")
@@ -1450,12 +1498,13 @@ with tab4:
             elif appointment_date < min_date:
                 st.error("⚠️ 预约日期不能选择过去的日期！")
             else:
-                # 检查是否重复预约
+                # 检查是否重复预约（从持久化文件查询）
+                all_appointments = load_all_appointments()
                 is_duplicate = any(
                     record["student_id"] == student_id and 
                     record["date"] == appointment_date.strftime("%Y-%m-%d") and
                     record["time"] == selected_time
-                    for record in st.session_state.appointment_records
+                    for record in all_appointments
                 )
                 
                 if is_duplicate:
@@ -1476,12 +1525,12 @@ with tab4:
                         "problem_desc": problem_desc,
                         "status": "待确认",  # 待确认/已确认/已取消/已完成
                         "create_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "admin_note": ""
+                        "admin_note": "",
+                        "admin_reply": ""  # 新增：管理员回复字段
                     }
                     
-                    # 保存预约记录
-                    st.session_state.appointment_records.append(new_appointment)
-                    st.session_state.admin_appointments.append(new_appointment)
+                    # 保存预约记录到持久化文件（核心修改）
+                    save_appointment(new_appointment)
                     
                     st.success(f"🎉 预约申请提交成功！")
                     st.info(f"""
@@ -1501,61 +1550,60 @@ with tab4:
     
     st.markdown("---")
     
-    # 2. 我的预约记录（所有用户可见）
+    # 2. 我的预约记录（所有用户可见，仅显示自己的）
     st.markdown("### 📋 我的预约记录")
-    if st.session_state.appointment_records:
-        # 筛选当前用户的预约记录
-        user_appointments = [
-            record for record in st.session_state.appointment_records
-            if record["username"] == st.session_state.user_info["username"]
-        ]
-        
-        if user_appointments:
-            for idx, record in enumerate(user_appointments):
-                with st.container(border=True):
-                    col_left, col_right = st.columns([3, 1])
-                    with col_left:
-                        st.markdown(f"**预约编号**：{record['id']}")
-                        st.markdown(f"**咨询师**：{record['teacher']}")
-                        st.markdown(f"**预约时间**：{record['date']} {record['time']}")
-                        st.markdown(f"**咨询类型**：{record['consult_type']}")
-                        st.markdown(f"**状态**：{record['status']}")
-                        
-                        # 显示状态标签 - 修复：使用Streamlit全版本支持的state值
-                        if record["status"] == "待确认":
-                            st.status("⏳ 待管理员确认", state="running")  # 替换pending
-                        elif record["status"] == "已确认":
-                            st.status("✅ 预约已确认", state="complete")  # 替换success
-                        elif record["status"] == "已取消":
-                            st.status("❌ 预约已取消", state="error")
-                        elif record["status"] == "已完成":
-                            st.status("✅ 咨询已完成", state="complete")  # 替换success
+    # 从持久化文件获取当前用户的预约记录（权限隔离）
+    user_appointments = get_user_appointments(st.session_state.user_info["username"])
+    
+    if user_appointments:
+        for idx, record in enumerate(user_appointments):
+            with st.container(border=True):
+                col_left, col_right = st.columns([3, 1])
+                with col_left:
+                    st.markdown(f"**预约编号**：{record['id']}")
+                    st.markdown(f"**咨询师**：{record['teacher']}")
+                    st.markdown(f"**预约时间**：{record['date']} {record['time']}")
+                    st.markdown(f"**咨询类型**：{record['consult_type']}")
+                    st.markdown(f"**状态**：{record['status']}")
                     
-                    with col_right:
-                        # 取消预约按钮（仅待确认状态可取消）
-                        if record["status"] == "待确认":
-                            if st.button(
-                                "取消预约", 
-                                key=f"cancel_{record['id']}",
-                                use_container_width=True,
-                                type="secondary"
-                            ):
-                                # 更新预约状态
-                                record["status"] = "已取消"
-                                record["admin_note"] = "用户主动取消预约"
-                                st.success(f"✅ 预约 {record['id']} 已取消！")
-                                st.rerun()
-        
-        else:
-            st.info("暂无预约记录，可提交新的预约申请")
+                    # 显示管理员回复（如果有）
+                    if record.get("admin_reply"):
+                        st.markdown(f"**管理员回复**：{record['admin_reply']}")
+                    
+                    # 显示状态标签
+                    if record["status"] == "待确认":
+                        st.status("⏳ 待管理员确认", state="running")
+                    elif record["status"] == "已确认":
+                        st.status("✅ 预约已确认", state="complete")
+                    elif record["status"] == "已取消":
+                        st.status("❌ 预约已取消", state="error")
+                    elif record["status"] == "已完成":
+                        st.status("✅ 咨询已完成", state="complete")
+                
+                with col_right:
+                    # 取消预约按钮（仅待确认状态可取消）
+                    if record["status"] == "待确认":
+                        if st.button(
+                            "取消预约", 
+                            key=f"cancel_{record['id']}",
+                            use_container_width=True,
+                            type="secondary"
+                        ):
+                            # 更新预约状态到持久化文件
+                            update_appointment(record["id"], {
+                                "status": "已取消",
+                                "admin_note": "用户主动取消预约"
+                            })
+                            st.success(f"✅ 预约 {record['id']} 已取消！")
+                            st.rerun()
     else:
         st.info("暂无预约记录，可提交新的预约申请")
     
     st.markdown("---")
     
-    # 3. 管理员预约管理（仅管理员可见）
+    # 3. 管理员预约管理（仅管理员可见，跨设备同步）
     if is_admin():
-        st.markdown("### 👑 预约管理（管理员专属）")
+        st.markdown("### 👑 预约管理（管理员专属，跨设备同步）")
         
         # 筛选状态
         filter_status = st.selectbox(
@@ -1564,8 +1612,11 @@ with tab4:
             key="admin_filter"
         )
         
+        # 从持久化文件加载所有预约记录
+        all_appointments = load_all_appointments()
+        
         # 筛选预约记录
-        filtered_appointments = st.session_state.admin_appointments
+        filtered_appointments = all_appointments
         if filter_status != "全部":
             filtered_appointments = [
                 record for record in filtered_appointments
@@ -1594,7 +1645,25 @@ with tab4:
                     
                     st.markdown(f"**咨询问题**：{record['problem_desc']}")
                     
-                    # 操作按钮 - 修复：将type="success"改为type="primary"
+                    # 新增：管理员回复功能
+                    st.markdown("#### 📝 管理员回复")
+                    admin_reply = st.text_area(
+                        "输入回复内容（用户可查看）",
+                        value=record.get("admin_reply", ""),
+                        height=80,
+                        key=f"reply_{record['id']}"
+                    )
+                    if st.button(
+                        "保存回复",
+                        key=f"save_reply_{record['id']}",
+                        use_container_width=True,
+                        type="secondary"
+                    ):
+                        update_appointment(record["id"], {"admin_reply": admin_reply})
+                        st.success(f"✅ 预约 {record['id']} 的回复已保存！")
+                        st.rerun()
+                    
+                    # 操作按钮
                     col_btn1, col_btn2, col_btn3 = st.columns(3)
                     with col_btn1:
                         if record["status"] == "待确认":
@@ -1604,8 +1673,10 @@ with tab4:
                                 use_container_width=True,
                                 type="primary"
                             ):
-                                record["status"] = "已确认"
-                                record["admin_note"] = "管理员已确认预约"
+                                update_appointment(record["id"], {
+                                    "status": "已确认",
+                                    "admin_note": "管理员已确认预约"
+                                })
                                 st.success(f"✅ 预约 {record['id']} 已确认！")
                                 st.rerun()
                     with col_btn2:
@@ -1616,8 +1687,10 @@ with tab4:
                                 use_container_width=True,
                                 type="secondary"
                             ):
-                                record["status"] = "已取消"
-                                record["admin_note"] = "管理员拒绝预约"
+                                update_appointment(record["id"], {
+                                    "status": "已取消",
+                                    "admin_note": "管理员拒绝预约"
+                                })
                                 st.success(f"✅ 预约 {record['id']} 已拒绝！")
                                 st.rerun()
                     with col_btn3:
@@ -1626,10 +1699,12 @@ with tab4:
                                 "标记完成", 
                                 key=f"complete_{record['id']}",
                                 use_container_width=True,
-                                type="primary"  # 修复：替换type="success"
+                                type="primary"
                             ):
-                                record["status"] = "已完成"
-                                record["admin_note"] = "咨询已完成"
+                                update_appointment(record["id"], {
+                                    "status": "已完成",
+                                    "admin_note": "咨询已完成"
+                                })
                                 st.success(f"✅ 预约 {record['id']} 已标记为完成！")
                                 st.rerun()
         else:
@@ -1638,9 +1713,10 @@ with tab4:
         # 导出预约记录（管理员功能）
         st.markdown("---")
         if st.button("📤 导出所有预约记录", use_container_width=True):
-            if st.session_state.admin_appointments:
+            all_appointments = load_all_appointments()
+            if all_appointments:
                 # 转换为DataFrame
-                df = pd.DataFrame(st.session_state.admin_appointments)
+                df = pd.DataFrame(all_appointments)
                 # 导出为CSV
                 csv = df.to_csv(index=False, encoding="utf-8-sig")
                 st.download_button(
@@ -1670,7 +1746,6 @@ with tab4:
         3. 咨询内容严格保密，遵循心理咨询伦理规范
         4. 如有紧急情况，请直接前往心理健康教育中心或拨打24小时热线
         """)
-
 
 # 标签页5：大连工业大学师资团队
 with tab5:
