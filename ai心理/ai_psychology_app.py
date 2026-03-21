@@ -1850,21 +1850,7 @@ def save_shared_resources(data):
         except Exception as e:
             st.error(f"保存资源数据失败: {e}")
 
-# ==================== 🔥 强制权限判断：只要侧边栏显示「系统管理员」就解锁 ====================
-def is_admin():
-    # 遍历所有 session_state 键，只要值包含「系统管理员」就判定为管理员登录
-    for key, value in st.session_state.items():
-        if isinstance(value, str) and "系统管理员" in value:
-            return True
-    # 兼容其他常见管理员状态
-    return (
-        st.session_state.get("is_admin", False)
-        or st.session_state.get("user_role", "") == "admin"
-        or st.session_state.get("role", "") == "系统管理员"
-        or st.session_state.get("username", "") == "系统管理员"
-    )
-
-# ==================== 系统内置资源 ====================
+# ==================== 配置数据（系统内置资源） ====================
 DLPU_CONSULT_SERVICE = {
     "service_object": "大连工业大学全体在校本科生、研究生、教职工",
     "service_type": [
@@ -1877,7 +1863,7 @@ DLPU_CONSULT_SERVICE = {
     "reservation_method": [
         "线上预约：通过大连工业大学云工大心理咨询预约",
         "线下预约：门诊部303、304房间登记预约",
-        "电话预约：0411-86318792（工作日8:30-11:30，13:30-17:00）",
+        "电话预约：0411-8618792（工作日8:30-11:30，13:30-17:00）",
         "紧急情况：可直接前往心理健康教育中心，或第一时间联系辅导员/班主任、学院副书记，也可拨打学校24小时值班电话"
     ],
     "consult_address": "门诊部303、304房间",
@@ -1952,9 +1938,12 @@ DLPU_PSYCHOLOGY_SCIENCE = {
 }
 
 # ==================== 会话状态初始化 ====================
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False  # 默认游客
 if "custom_psychology_resources" not in st.session_state:
     st.session_state.custom_psychology_resources = load_shared_resources()
 
+# ==================== 合并系统资源+自定义资源 ====================
 def get_combined_resources():
     system_resources = {
         "psychological_course": DLPU_PSYCHOLOGY_RESOURCES["psychological_course"],
@@ -1968,121 +1957,149 @@ def get_combined_resources():
         combined[key] = system_resources[key] + custom_res.get(key, [])
     return combined
 
-# ==================== tab6 页面：管理员解锁发送内容能力 ====================
-# 替换成你实际的 tab6 容器（如 with tabs[6]:）
+# ==================== 管理员登录/退出逻辑（侧边栏） ====================
+with st.sidebar:
+    st.subheader("👤 管理员登录")
+    if not st.session_state.is_admin:
+        admin_user = st.text_input("管理员账号", value="")
+        admin_pwd = st.text_input("管理员密码", type="password", value="")
+        if st.button("登录", use_container_width=True):
+            # 这里可以替换为你的真实账号密码校验
+            if admin_user == "admin" and admin_pwd == "123456":
+                st.session_state.is_admin = True
+                st.success("登录成功！")
+                st.rerun()
+            else:
+                st.error("账号或密码错误！")
+    else:
+        st.success("✅ 当前管理员：系统管理员")
+        if st.button("退出登录", use_container_width=True):
+            st.session_state.is_admin = False
+            st.rerun()
+
+# ==================== tab6 页面渲染（确保在 st.tabs 内部） ====================
+# 假设你的主页面是这样的（如果不是，把下面 with tab6: 替换成你实际的 tab 结构）：
+# tabs = st.tabs(["首页", "咨询", "测评", "科普", "我的", "设置", "心理咨询指南"])
+# tab6 = tabs[6]  # 第7个标签页（索引从0开始）
+
 with tab6:
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
-
-    # 🔥 权限状态与管理功能
-    if is_admin():
-        st.success("👑 管理员模式：您可以添加/删除自定义心理资源（发送内容）")
-        
-        # 资源管理区（管理员专属发送内容能力）
-        st.markdown("### 📝 资源管理（管理员专属）")
-        resource_types = {
-            "psychological_course": "心理健康课程",
-            "psychological_activity": "心理健康活动",
-            "psychological_test": "心理测评工具",
-            "online_resources": "线上资源"
-        }
-        resource_type = st.selectbox("选择要管理的资源类型", list(resource_types.values()), key="admin_resource_type")
-        resource_key = [k for k, v in resource_types.items() if v == resource_type][0]
-
-        # 发送/添加新内容的表单
+    
+    # 权限提示
+    if st.session_state.is_admin:
+        st.success("👑 管理员模式：您可以添加/删除自定义心理资源")
+    else:
+        st.info("💡 提示：您当前以游客身份访问，仅可查看资源内容。如需管理权限，请在左侧 sidebar 登录管理员账号。")
+    
+    st.markdown("---")
+    
+    # 服务对象
+    st.markdown("### 🎓 服务对象")
+    st.markdown(f"{DLPU_CONSULT_SERVICE['service_object']}")
+    st.markdown("---")
+    
+    # 服务类型
+    st.markdown("### 📋 服务类型")
+    for service in DLPU_CONSULT_SERVICE['service_type']:
+        st.markdown(f"- {service}")
+    st.markdown("---")
+    
+    # 预约方式
+    st.markdown("### 📱 预约方式")
+    for method in DLPU_CONSULT_SERVICE['reservation_method']:
+        st.markdown(f"- {method}")
+    st.markdown("---")
+    
+    # 咨询地点和时间
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 📍 咨询地点")
+        st.markdown(f"{DLPU_CONSULT_SERVICE['consult_address']}")
+    with col2:
+        st.markdown("### ⏰ 咨询时间")
+        st.markdown(f"{DLPU_CONSULT_SERVICE['consult_time']}")
+    st.markdown("---")
+    
+    # 服务原则
+    st.markdown("### 📜 服务原则")
+    for principle in DLPU_CONSULT_SERVICE['service_principle']:
+        st.markdown(f"- {principle}")
+    st.markdown("---")
+    
+    # 校园心理资源 + 管理员操作
+    st.markdown("### 📚 校园心理资源")
+    resource_types = {
+        "psychological_course": "心理健康课程",
+        "psychological_activity": "心理健康活动", 
+        "psychological_test": "心理测评工具",
+        "online_resources": "线上资源"
+    }
+    resource_type_to_manage = st.selectbox(
+        "选择资源类型",
+        list(resource_types.values()),
+        key="tab6_resource_select"
+    )
+    resource_type_key = [k for k, v in resource_types.items() if v == resource_type_to_manage][0]
+    
+    # 只有管理员登录后，才显示「添加/删除资源」的表单
+    if st.session_state.is_admin:
+        st.markdown("#### 📝 资源管理（管理员专属）")
         with st.form("add_resource_form", clear_on_submit=True):
-            new_content = st.text_area(
-                f"新增{resource_type}内容",
-                placeholder=f"请输入新的{resource_type}内容...",
+            new_resource = st.text_area(
+                "新增资源内容", 
+                placeholder=f"请输入新的{resource_type_to_manage}内容...",
                 height=100
             )
             col1, col2 = st.columns(2)
             with col1:
-                submitted = st.form_submit_button("✅ 发送/添加内容", use_container_width=True)
+                submit_add = st.form_submit_button("➕ 添加资源", use_container_width=True)
             with col2:
-                st.form_submit_button("🗑️ 清空输入", use_container_width=True)
-
-            if submitted and new_content.strip():
-                if resource_key not in st.session_state.custom_psychology_resources:
-                    st.session_state.custom_psychology_resources[resource_key] = []
-                st.session_state.custom_psychology_resources[resource_key].append(new_content)
+                clear_form = st.form_submit_button("🗑️ 清空内容", use_container_width=True)
+            
+            if submit_add and new_resource.strip():
+                if resource_type_key not in st.session_state.custom_psychology_resources:
+                    st.session_state.custom_psychology_resources[resource_type_key] = []
+                st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
                 save_shared_resources(st.session_state.custom_psychology_resources)
-                st.success(f"✅ {resource_type} 内容发送成功！已同步到所有设备")
+                st.success("✅ 资源添加成功！已同步到所有设备")
                 st.rerun()
-
         st.markdown("---")
-
-        # 删除已发送内容的功能
-        st.markdown("### 🔧 管理已发送内容")
-        if resource_key in st.session_state.custom_psychology_resources and st.session_state.custom_psychology_resources[resource_key]:
-            for idx, item in enumerate(st.session_state.custom_psychology_resources[resource_key]):
+        
+        st.markdown("#### 🔧 自定义资源管理")
+        if (resource_type_key in st.session_state.custom_psychology_resources and 
+            st.session_state.custom_psychology_resources[resource_type_key]):
+            for idx, resource in enumerate(st.session_state.custom_psychology_resources[resource_type_key]):
                 col_content, col_delete = st.columns([5, 1])
                 with col_content:
-                    st.markdown(f"🔹 {item}")
+                    st.markdown(f"🔹 {resource}")
                 with col_delete:
-                    if st.button("🗑️ 删除", key=f"del_{resource_key}_{idx}"):
-                        st.session_state.custom_psychology_resources[resource_key].pop(idx)
+                    if st.button("🗑️ 删除", key=f"tab6_delete_{resource_type_key}_{idx}"):
+                        st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
                         save_shared_resources(st.session_state.custom_psychology_resources)
-                        st.success("✅ 内容已删除！")
+                        st.success("✅ 资源已删除！已同步到所有设备")
                         st.rerun()
         else:
-            st.info(f"暂无已发送的{resource_type}内容")
-        st.markdown("---")
+            st.info(f"暂无自定义{resource_type_to_manage}，请添加")
+    st.markdown("---")
+    
+    # 完整资源列表（系统+自定义）
+    st.markdown(f"#### 📋 完整的{resource_type_to_manage}列表")
+    combined_resources = get_combined_resources()
+    all_resources = combined_resources[resource_type_key]
+    if all_resources:
+        for resource in all_resources:
+            is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
+                        resource in st.session_state.custom_psychology_resources[resource_type_key])
+            icon = "🔹" if is_custom else "📌"
+            label = "（管理员添加）" if is_custom else "（系统内置）"
+            st.markdown(f"{icon} {resource} {label}")
     else:
-        st.info("💡 提示：您当前以游客身份访问，仅可查看资源内容。如需管理权限，请在左侧侧边栏登录管理员账号。")
-
-    # 公共资源展示区（所有用户可见）
-    st.markdown("### 📚 校园心理资源")
-    public_resource_types = {
-        "psychological_course": "心理健康课程",
-        "psychological_activity": "心理健康活动",
-        "psychological_test": "心理测评工具",
-        "online_resources": "线上资源"
-    }
-    public_resource_type = st.selectbox("选择资源类型查看", list(public_resource_types.values()), key="public_resource_type")
-    public_resource_key = [k for k, v in public_resource_types.items() if v == public_resource_type][0]
-
-    st.markdown(f"### 📋 完整的{public_resource_type}列表")
-    combined = get_combined_resources()
-    if combined[public_resource_key]:
-        for item in combined[public_resource_key]:
-            is_custom = item in st.session_state.custom_psychology_resources.get(public_resource_key, [])
-            label = "（管理员发送）" if is_custom else "（系统内置）"
-            st.markdown(f"📌 {item} {label}")
-    else:
-        st.info(f"暂无{public_resource_type}内容")
+        st.info(f"暂无{resource_type_to_manage}内容")
     st.markdown("---")
-
-    # 基础服务信息（保留原有展示）
-    st.markdown("### 🎓 服务对象")
-    st.markdown(DLPU_CONSULT_SERVICE["service_object"])
-    st.markdown("---")
-
-    st.markdown("### 📋 服务类型")
-    for s in DLPU_CONSULT_SERVICE["service_type"]:
-        st.markdown(f"- {s}")
-    st.markdown("---")
-
-    st.markdown("### 📱 预约方式")
-    for m in DLPU_CONSULT_SERVICE["reservation_method"]:
-        st.markdown(f"- {m}")
-    st.markdown("---")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### 📍 咨询地点")
-        st.markdown(DLPU_CONSULT_SERVICE["consult_address"])
-    with col2:
-        st.markdown("### ⏰ 咨询时间")
-        st.markdown(DLPU_CONSULT_SERVICE["consult_time"])
-    st.markdown("---")
-
-    st.markdown("### 📜 服务原则")
-    for p in DLPU_CONSULT_SERVICE["service_principle"]:
-        st.markdown(f"- {p}")
-    st.markdown("---")
-
+    
+    # 危机干预热线
     st.markdown("### 🆘 危机干预热线")
     st.markdown(f"- 学校工作日热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['school_hotline']}")
     st.markdown(f"- 学校24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['school_24h_hotline']}")
@@ -2090,23 +2107,26 @@ with tab6:
     st.markdown(f"- 辽宁省24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['provincial_hotline']}")
     st.markdown(f"- 全国24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['national_hotline']}")
     st.markdown("---")
-
+    
+    # 温馨提示
     with st.info("💡 温馨提示"):
-        st.markdown(DLPU_CONSULT_SERVICE["notice"])
+        st.markdown(DLPU_CONSULT_SERVICE['notice'])
     st.markdown("---")
-
+    
+    # 心理健康科普
     st.markdown("### 📖 心理健康科普")
-    t1, t2, t3 = st.tabs(["常见问题", "健康贴士", "危机识别"])
-    with t1:
-        for prob in DLPU_PSYCHOLOGY_SCIENCE["common_problems"]:
-            with st.expander(prob["title"]):
-                st.markdown(prob["content"])
-    with t2:
+    tab6_1, tab6_2, tab6_3 = st.tabs(["常见问题", "健康贴士", "危机识别"])
+    with tab6_1:
+        for problem in DLPU_PSYCHOLOGY_SCIENCE["common_problems"]:
+            with st.expander(problem['title']):
+                st.markdown(problem['content'])
+    with tab6_2:
+        st.markdown("### 日常心理健康维护建议")
         for tip in DLPU_PSYCHOLOGY_SCIENCE["mental_health_tips"]:
             st.markdown(f"- {tip}")
-    with t3:
+    with tab6_3:
         st.markdown(f"### {DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['title']}")
-        st.markdown(DLPU_PSYCHOLOGY_SCIENCE["crisis_identification"]["content"])
+        st.markdown(DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['content'])
 # -------------------------- 专业心理工具库（tab7）功能代码 --------------------------
 from streamlit.components.v1 import html
 import random
