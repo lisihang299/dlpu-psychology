@@ -441,17 +441,18 @@ def init_ai_client():
     )
     return client
 
+# 备选方案：使用SnowNLP（需先安装：pip install snownlp）
+from snownlp import SnowNLP
+
 def analyze_emotion(text):
-    """情感分析：识别焦虑/积极/中性"""
+    """情感分析：基于SnowNLP的稳定版本"""
     try:
-        lm = ps.LM()
-        tokens = lm.tokenize(text)
-        score = lm.get_score(tokens)
-        polarity = round(score['polarity'], 2)
+        s = SnowNLP(text)
+        polarity = round(s.sentiments - 0.5, 2)  # 转换为-0.5~0.5的极性值
         
-        # 强化焦虑情绪识别（关键词+极性值）
         anxiety_keywords = ["焦虑", "压力大", "睡不着", "烦躁", "紧张", "心慌", "焦虑症", "压抑"]
         is_anxiety = any(word in text for word in anxiety_keywords) or polarity < -0.2
+        
         if is_anxiety:
             emotion = "焦虑/消极"
             st.session_state.show_anxiety_resources = True
@@ -461,10 +462,11 @@ def analyze_emotion(text):
         else:
             emotion = "中性"
             st.session_state.show_anxiety_resources = False
+        
         return emotion, polarity, is_anxiety
     except Exception as e:
-        st.warning(f"情感分析暂时不可用：{str(e)}")
-        return "未知", 0.0, False
+        st.warning(f"情感分析暂不可用：{str(e)}（已自动降级为中性分析）")
+        return "中性", 0.0, False
 
 def get_psychology_prompt():
     """优化提示词：仅保留指定的0411-86318792一个电话"""
