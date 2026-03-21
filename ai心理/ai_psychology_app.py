@@ -1850,14 +1850,18 @@ def save_shared_resources(data):
         except Exception as e:
             st.error(f"保存资源数据失败: {e}")
 
-# ==================== 🔥 精准权限判断（适配你的侧边栏） ====================
+# ==================== 🔥 强制权限判断：只要侧边栏显示「系统管理员」就解锁 ====================
 def is_admin():
-    # 适配你侧边栏显示的「系统管理员」状态，覆盖所有可能情况
+    # 遍历所有 session_state 键，只要值包含「系统管理员」就判定为管理员登录
+    for key, value in st.session_state.items():
+        if isinstance(value, str) and "系统管理员" in value:
+            return True
+    # 兼容其他常见管理员状态
     return (
-        st.session_state.get("role", "") == "系统管理员"
-        or st.session_state.get("username", "") == "系统管理员"
-        or st.session_state.get("is_admin", False)
+        st.session_state.get("is_admin", False)
         or st.session_state.get("user_role", "") == "admin"
+        or st.session_state.get("role", "") == "系统管理员"
+        or st.session_state.get("username", "") == "系统管理员"
     )
 
 # ==================== 系统内置资源 ====================
@@ -1873,7 +1877,7 @@ DLPU_CONSULT_SERVICE = {
     "reservation_method": [
         "线上预约：通过大连工业大学云工大心理咨询预约",
         "线下预约：门诊部303、304房间登记预约",
-        "电话预约：0411-8618792（工作日8:30-11:30，13:30-17:00）",
+        "电话预约：0411-86318792（工作日8:30-11:30，13:30-17:00）",
         "紧急情况：可直接前往心理健康教育中心，或第一时间联系辅导员/班主任、学院副书记，也可拨打学校24小时值班电话"
     ],
     "consult_address": "门诊部303、304房间",
@@ -1964,7 +1968,7 @@ def get_combined_resources():
         combined[key] = system_resources[key] + custom_res.get(key, [])
     return combined
 
-# ==================== tab6 页面：管理员可发送内容 ====================
+# ==================== tab6 页面：管理员解锁发送内容能力 ====================
 # 替换成你实际的 tab6 容器（如 with tabs[6]:）
 with tab6:
     st.title("🏫 大连工业大学 心理咨询服务指南")
@@ -2102,7 +2106,7 @@ with tab6:
             st.markdown(f"- {tip}")
     with t3:
         st.markdown(f"### {DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['title']}")
-        st.markdown(DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['content'])
+        st.markdown(DLPU_PSYCHOLOGY_SCIENCE["crisis_identification"]["content"])
 # -------------------------- 专业心理工具库（tab7）功能代码 --------------------------
 from streamlit.components.v1 import html
 import random
