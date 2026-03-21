@@ -2905,7 +2905,10 @@ with tool6:
         if "tree_hole_sensitive" not in st.session_state:
             st.session_state.tree_hole_sensitive = []
         if "is_admin" not in st.session_state:
-            st.session_state.is_admin = True
+            st.session_state.is_admin = False  # 默认非管理员，避免误操作
+        # 新增：初始化用户唯一标识（基于会话ID，确保每个游客有唯一标识）
+        if "user_identifier" not in st.session_state:
+            st.session_state.user_identifier = st.session_id  # 用streamlit内置会话ID作为游客唯一标识
 
         # ==================== 核心CSS（不变） ====================
         st.markdown("""
@@ -3088,7 +3091,7 @@ with tool6:
         # 分栏布局
         col1, col2 = st.columns([1, 2], gap="medium")
 
-        # 左侧：发布区（不变）
+        # 左侧：发布区（新增：绑定发布者唯一标识）
         with col1:
             st.markdown('<div class="post-card">', unsafe_allow_html=True)
             st.markdown('<h4 style="color:#5a4b3c; margin-bottom:8px; font-size:15px;">✍️ 匿名倾诉</h4>', unsafe_allow_html=True)
@@ -3152,7 +3155,9 @@ with tool6:
                             "create_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "like_count": 0,
                             "comments": [],
-                            "response": get_campus_response(emotion_tag)
+                            "response": get_campus_response(emotion_tag),
+                            # 核心新增：绑定帖子发布者的唯一标识
+                            "publisher_id": st.session_state.user_identifier
                         }
                         shared_data["posts"].append(post_data)
                         save_shared_data(shared_data)
@@ -3164,7 +3169,7 @@ with tool6:
                         st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # 右侧：展示区（关键：每次都用最新的 shared_data）
+        # 右侧：展示区（核心修改：删除权限校验）
         with col2:
             st.markdown('<h4 style="color:#5a4b3c; margin-bottom:4px; font-size:15px;">🌟 树洞回音</h4>', unsafe_allow_html=True)
             st.markdown('<p class="warm-text">看看工大伙伴们的暖心分享～</p>', unsafe_allow_html=True)
@@ -3194,16 +3199,32 @@ with tool6:
                     with post_head2:
                         st.markdown(f'<span style="color:#a89988; font-size:10px; text-align:right; display:block;">{post["create_time"]}</span>',
                                     unsafe_allow_html=True)
-                    if st.session_state.is_admin:
-                        with post_head3:
+                    # 核心修改1：帖子删除权限校验
+                    with post_head3:
+                        # 管理员：可删除所有帖子；普通游客：仅能删除自己发布的帖子
+                        can_delete_post = False
+                        if st.session_state.is_admin:
+                            can_delete_post = True
+                        else:
+                            # 检查当前游客是否是帖子发布者（兼容旧数据：无publisher_id则不可删除）
+                            can_delete_post = post.get("publisher_id") == st.session_state.user_identifier
+                        
+                        if can_delete_post:
                             st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
                             if st.button("🗑️ 删除", key=f"del_post_{post['id']}", use_container_width=True):
                                 # 重新加载最新数据，再删除，避免索引错位
                                 shared_data = load_shared_data()
-                                del shared_data["posts"][-(post_idx+1)]
-                                save_shared_data(shared_data)
-                                st.success("✅ 已删除该帖子")
-                                st.rerun()
+                                # 找到原数组中的索引（展示时是倒序，需反向查找）
+                                original_idx = None
+                                for i, p in enumerate(shared_data["posts"]):
+                                    if p["id"] == post["id"]:
+                                        original_idx = i
+                                        break
+                                if original_idx is not None:
+                                    del shared_data["posts"][original_idx]
+                                    save_shared_data(shared_data)
+                                    st.success("✅ 已删除该帖子")
+                                    st.rerun()
                             st.markdown('</div>', unsafe_allow_html=True)
                     
                     # 内容+图片
@@ -3252,14 +3273,16 @@ with tool6:
                                                 p["comments"].append({
                                                     "nickname": "工大暖心小伙伴",
                                                     "content": comment.strip(),
-                                                    "time": datetime.datetime.now().strftime("%H:%M:%S")
+                                                    "time": datetime.datetime.now().strftime("%H:%M:%S"),
+                                                    # 核心新增：绑定评论发布者的唯一标识
+                                                    "commenter_id": st.session_state.user_identifier
                                                 })
                                                 break
                                         save_shared_data(shared_data)
                                         st.success("💖 你的鼓励已送达～")
                                         st.rerun()
                     
-                    # 评论列表
+                    # 评论列表（核心修改2：评论删除权限校验）
                     if post["comments"] and len(post["comments"]) > 0:
                         st.markdown('<p class="warm-text" style="font-size:11px; margin-top:6px; font-weight:500;">📝 暖心评论：</p>', unsafe_allow_html=True)
                         for c_idx, c in enumerate(post["comments"]):
@@ -3270,8 +3293,16 @@ with tool6:
                                             f'<span style="color:#a89988;">({c["time"]})</span>：'
                                             f'<span class="warm-text">{c["content"]}</span>'
                                             f'</div>', unsafe_allow_html=True)
-                            if st.session_state.is_admin:
-                                with cmt_col2:
+                            with cmt_col2:
+                                # 管理员：可删除所有评论；普通游客：仅能删除自己发布的评论
+                                can_delete_cmt = False
+                                if st.session_state.is_admin:
+                                    can_delete_cmt = True
+                                else:
+                                    # 检查当前游客是否是评论发布者（兼容旧数据：无commenter_id则不可删除）
+                                    can_delete_cmt = c.get("commenter_id") == st.session_state.user_identifier
+                                
+                                if can_delete_cmt:
                                     st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
                                     if st.button("🗑️", key=f"del_cmt_{post['id']}_{c_idx}", use_container_width=True):
                                         shared_data = load_shared_data()
