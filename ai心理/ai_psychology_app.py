@@ -1810,12 +1810,39 @@ with tab5:
         st.markdown("---")
 
 # 标签页6：学校咨询服务（包含校园心理资源自定义功能）
+# 标签页6：学校咨询服务（包含校园心理资源自定义功能）
 import streamlit as st
 import json
 import os
 import sys
 
-# ===================== 新增：持久化存储配置 =====================
+# ===================== 新增：跨设备同步核心配置（仅新增这部分） =====================
+# 补充缺失的is_admin函数（简化版，直接开放管理权限）
+def is_admin():
+    """管理员判断（简化版，如需限制可自行修改）"""
+    return True  # 返回True表示所有人可管理，如需密码验证可自行扩展
+
+# 修复get_combined_resources函数（核心：确保游客能读取自定义资源）
+def get_combined_resources():
+    """合并系统内置和自定义资源（跨设备可见）"""
+    # 系统内置资源（请根据你的实际数据修改）
+    system_resources = {
+        "psychological_course": [],
+        "psychological_activity": [],
+        "psychological_test": [],
+        "online_resources": []
+    }
+    
+    # 核心修改：合并管理员添加的自定义资源（跨设备共享）
+    combined = {}
+    for key in system_resources.keys():
+        # 系统资源 + 管理员添加的资源
+        custom_res = st.session_state.custom_psychology_resources.get(key, [])
+        combined[key] = system_resources[key] + custom_res
+    
+    return combined
+
+# ===================== 原有：持久化存储配置（完全保留） =====================
 # 定义数据存储文件路径（确保路径兼容 Streamlit Cloud）
 DATA_FILE = "custom_psychology_resources.json"
 
@@ -1835,6 +1862,7 @@ def init_custom_resources():
 def save_custom_resources():
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(st.session_state.custom_psychology_resources, f, ensure_ascii=False, indent=2)
+
 
 # ===================== 原有功能代码（已修改） =====================
 with tab6:
