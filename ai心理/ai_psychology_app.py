@@ -1809,140 +1809,17 @@ with tab5:
                     st.markdown(f"- {service}")
         st.markdown("---")
 
-# 标签页6：学校咨询服务（包含校园心理资源自定义功能）
-import streamlit as st
-import json
-import os
-import sys
-
-# ===================== 核心修复：管理员权限判断 + 跨设备同步 =====================
-# 管理员账号配置（可自行修改）
-ADMIN_USER = "admin"
-ADMIN_PWD = "dlpu123"
-
-def init_admin_state():
-    """初始化管理员登录状态（必须优先执行）"""
-    if "is_admin_login" not in st.session_state:
-        st.session_state.is_admin_login = False
-
-def is_admin():
-    """管理员登录验证 + 侧边栏登录面板"""
-    # 初始化登录状态
-    init_admin_state()
-    
-    # 侧边栏管理员登录面板
-    with st.sidebar:
-        st.subheader("🔐 管理员登录")
-        username = st.text_input("用户名", key="admin_user_tab6")
-        password = st.text_input("密码", type="password", key="admin_pwd_tab6")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("登录", use_container_width=True):
-                if username == ADMIN_USER and password == ADMIN_PWD:
-                    st.session_state.is_admin_login = True
-                    st.success("✅ 管理员登录成功！")
-                    st.rerun()  # 刷新页面显示编辑功能
-                else:
-                    st.error("❌ 账号或密码错误！")
-        
-        with col2:
-            if st.button("退出", use_container_width=True) and st.session_state.is_admin_login:
-                st.session_state.is_admin_login = False
-                st.info("👤 已退出管理员模式")
-                st.rerun()
-    
-    # 返回登录状态（核心：确保登录后能看到编辑功能）
-    return st.session_state.is_admin_login
-
-# 跨设备可见的资源合并函数
-def get_combined_resources():
-    """系统内置 + 管理员添加的资源（所有设备可见）"""
-    system_resources = {
-        "psychological_course": [],
-        "psychological_activity": [],
-        "psychological_test": [],
-        "online_resources": []
-    }
-    
-    combined = {}
-    for key in system_resources.keys():
-        custom_res = st.session_state.get("custom_psychology_resources", {}).get(key, [])
-        combined[key] = system_resources[key] + custom_res
-    return combined
-
-# ===================== 原有：持久化存储配置 =====================
-DATA_FILE = "custom_psychology_resources.json"
-
-def init_custom_resources():
-    if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump({}, f, ensure_ascii=False)
-    
-    if "custom_psychology_resources" not in st.session_state:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            st.session_state.custom_psychology_resources = json.load(f)
-
-def save_custom_resources():
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(st.session_state.custom_psychology_resources, f, ensure_ascii=False, indent=2)
-
-# ===================== 模拟配置数据（避免变量报错） =====================
-DLPU_CONSULT_SERVICE = {
-    "service_object": "大连工业大学全体在校本科生、研究生、教职工",
-    "service_type": ["个体心理咨询", "团体心理咨询", "心理危机干预", "心理健康教育"],
-    "reservation_method": ["线下预约：大学生活动中心302室", "电话预约：0411-86318792"],
-    "consult_address": "大连工业大学大学生活动中心302室",
-    "consult_time": "周一至周五：8:30-11:30，14:00-17:00",
-    "service_principle": ["保密原则", "自愿原则", "中立原则", "尊重原则"],
-    "notice": "心理咨询是专业的心理支持服务，如有需要请及时预约。保护隐私，专业守护！"
-}
-
-DLPU_PSYCHOLOGY_RESOURCES = {
-    "crisis_hotline": {
-        "dalian_hotline": "0411-84648080",
-        "provincial_hotline": "400-709-2009",
-        "national_hotline": "400-161-9995"
-    }
-}
-
-DLPU_PSYCHOLOGY_SCIENCE = {
-    "common_problems": [
-        {"title": "如何缓解学业压力？", "content": "合理规划时间，适当运动，寻求同学/老师帮助，必要时预约心理咨询。"},
-        {"title": "如何处理人际关系矛盾？", "content": "换位思考，坦诚沟通，保持边界感，避免情绪化表达。"}
-    ],
-    "mental_health_tips": ["规律作息", "适度运动", "培养兴趣爱好", "学会情绪表达"],
-    "crisis_identification": {
-        "title": "心理危机识别信号",
-        "content": "持续情绪低落、失眠/嗜睡、社交隔离、言语中透露绝望感等，发现此类情况请及时联系心理中心。"
-    }
-}
-
-# ===================== 主功能代码（管理员能看到编辑功能） =====================
-# 初始化tab6（如果你的主程序有tabs，替换为你的实际tab6）
-if "tab6" not in st.session_state:
-    tab6 = st.container()
-
 with tab6:
-    # 优先初始化管理员状态（关键：确保登录状态生效）
-    init_admin_state()
-    
-    # 标签页标题
+    # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
     
-    # 初始化资源
-    init_custom_resources()
-    
-    # 获取管理员状态（登录后为True，显示编辑功能）
-    admin_flag = is_admin()
-    
-    # 显示权限状态
-    if admin_flag:
-        st.success("👑 管理员模式：您可以看到并使用所有编辑功能！")
+    # 显示当前用户权限状态
+    if is_admin():
+        st.success("👑 管理员模式：您可以管理所有心理资源")
     else:
-        st.info("👤 游客模式：仅可查看资源，无编辑权限")
+        st.info("👤 游客模式：您只能查看心理资源内容")
     
     st.markdown("---")
     
@@ -1984,24 +1861,29 @@ with tab6:
     
     st.markdown("---")
     
-    # 校园心理资源（管理员能看到编辑功能）
+    # 校园心理资源（严格的权限控制）
     st.markdown("### 📚 校园心理资源")
+    
+    # 资源类型选择
     resource_types = {
         "psychological_course": "心理健康课程",
         "psychological_activity": "心理健康活动", 
         "psychological_test": "心理测评工具",
         "online_resources": "线上资源"
     }
+    
     resource_type_to_manage = st.selectbox(
         "选择资源类型",
         list(resource_types.values()),
         key="resource_type_select"
     )
+    
+    # 获取对应的键
     resource_type_key = [k for k, v in resource_types.items() if v == resource_type_to_manage][0]
     
-    # ========== 核心：管理员专属编辑功能（登录后可见） ==========
-    if admin_flag:
-        st.markdown("#### 📝 资源管理（管理员专属编辑功能）")
+    # 只有管理员才能看到资源管理功能
+    if is_admin():
+        st.markdown("#### 📝 资源管理（管理员专属）")
         
         # 添加资源表单
         with st.form("add_resource_form", clear_on_submit=True):
@@ -2017,52 +1899,55 @@ with tab6:
                 clear_form = st.form_submit_button("🗑️ 清空内容", use_container_width=True)
             
             if submit_add and new_resource.strip():
+                # 添加资源到自定义资源列表
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                save_custom_resources()
-                st.success("✅ 资源添加成功！所有设备都能看到")
+                st.success("✅ 资源添加成功！")
                 st.rerun()
         
         st.markdown("---")
         
-        # 删除资源功能
-        st.markdown("#### 🔧 自定义资源管理（删除功能）")
+        # 显示自定义资源（管理员可以管理）
+        st.markdown("#### 🔧 自定义资源管理")
         if (resource_type_key in st.session_state.custom_psychology_resources and 
             st.session_state.custom_psychology_resources[resource_type_key]):
+            
             for idx, resource in enumerate(st.session_state.custom_psychology_resources[resource_type_key]):
                 col_content, col_delete = st.columns([5, 1])
                 with col_content:
-                    st.markdown(f"🔹 {resource}（跨设备可见）")
+                    st.markdown(f"🔹 {resource}")
                 with col_delete:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
+                        # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        save_custom_resources()
-                        st.success("✅ 资源已删除！所有设备已同步")
+                        st.success("✅ 资源已删除！")
                         st.rerun()
         else:
-            st.info(f"暂无自定义{resource_type_to_manage}，请点击上方表单添加")
+            st.info(f"暂无自定义{resource_type_to_manage}，请添加")
     else:
-        # 游客仅能查看
+        # 游客只能查看，完全隐藏编辑功能
         st.markdown("#### 📋 资源查看")
-        st.info("💡 提示：使用管理员账号登录后可看到编辑/删除功能")
+        st.info("💡 提示：您当前以游客身份访问，只能查看资源内容。如需管理权限，请使用管理员账号登录。")
     
     st.markdown("---")
     
-    # 显示完整资源列表（所有设备可见）
+    # 显示完整的资源列表（所有用户可见）
     st.markdown(f"#### 📋 完整的{resource_type_to_manage}列表")
+    
     combined_resources = get_combined_resources()
     all_resources = combined_resources[resource_type_key]
     
     if all_resources:
         for resource in all_resources:
+            # 标记自定义资源
             is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
                         resource in st.session_state.custom_psychology_resources[resource_type_key])
             icon = "🔹" if is_custom else "📌"
-            label = "（管理员添加，所有设备可见）" if is_custom else "（系统内置）"
+            label = "（管理员添加）" if is_custom else "（系统内置）"
             st.markdown(f"{icon} {resource} {label}")
     else:
-        st.info(f"暂无{resource_type_to_manage}内容，管理员可添加")
+        st.info(f"暂无{resource_type_to_manage}内容")
     
     st.markdown("---")
     
@@ -2079,7 +1964,7 @@ with tab6:
     with st.info("💡 温馨提示"):
         st.markdown(DLPU_CONSULT_SERVICE['notice'])
     
-    # 心理健康科普
+    # 新增：心理健康科普
     st.markdown("---")
     st.markdown("### 📖 心理健康科普")
     tab6_1, tab6_2, tab6_3 = st.tabs(["常见问题", "健康贴士", "危机识别"])
