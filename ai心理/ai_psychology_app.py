@@ -1939,7 +1939,7 @@ DLPU_PSYCHOLOGY_SCIENCE = {
 
 # ==================== 会话状态初始化 ====================
 if "is_admin" not in st.session_state:
-    st.session_state.is_admin = False  # 默认游客，可根据登录逻辑修改
+    st.session_state.is_admin = False  # 默认游客
 if "custom_psychology_resources" not in st.session_state:
     st.session_state.custom_psychology_resources = load_shared_resources()
 
@@ -1957,21 +1957,41 @@ def get_combined_resources():
         combined[key] = system_resources[key] + custom_res.get(key, [])
     return combined
 
-# ==================== 权限判断 ====================
-def is_admin():
-    return st.session_state.get("is_admin", False)
+# ==================== 管理员登录/退出逻辑（侧边栏） ====================
+with st.sidebar:
+    st.subheader("👤 管理员登录")
+    if not st.session_state.is_admin:
+        admin_user = st.text_input("管理员账号", value="")
+        admin_pwd = st.text_input("管理员密码", type="password", value="")
+        if st.button("登录", use_container_width=True):
+            # 这里可以替换为你的真实账号密码校验
+            if admin_user == "admin" and admin_pwd == "123456":
+                st.session_state.is_admin = True
+                st.success("登录成功！")
+                st.rerun()
+            else:
+                st.error("账号或密码错误！")
+    else:
+        st.success("✅ 当前管理员：系统管理员")
+        if st.button("退出登录", use_container_width=True):
+            st.session_state.is_admin = False
+            st.rerun()
 
-# ==================== 页面渲染 ====================
-with st.container() as tab6:
+# ==================== tab6 页面渲染（确保在 st.tabs 内部） ====================
+# 假设你的主页面是这样的（如果不是，把下面 with tab6: 替换成你实际的 tab 结构）：
+# tabs = st.tabs(["首页", "咨询", "测评", "科普", "我的", "设置", "心理咨询指南"])
+# tab6 = tabs[6]  # 第7个标签页（索引从0开始）
+
+with tab6:
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
     
-    # 游客/管理员提示
-    if is_admin():
-        st.success("👑 管理员模式：您可以管理所有心理资源（添加/删除自定义资源）")
+    # 权限提示
+    if st.session_state.is_admin:
+        st.success("👑 管理员模式：您可以添加/删除自定义心理资源")
     else:
-        st.info("💡 提示：您当前以游客身份访问，只能查看资源内容。如需管理权限，请使用管理员账号登录。")
+        st.info("💡 提示：您当前以游客身份访问，仅可查看资源内容。如需管理权限，请在左侧 sidebar 登录管理员账号。")
     
     st.markdown("---")
     
@@ -2008,7 +2028,7 @@ with st.container() as tab6:
         st.markdown(f"- {principle}")
     st.markdown("---")
     
-    # 校园心理资源
+    # 校园心理资源 + 管理员操作
     st.markdown("### 📚 校园心理资源")
     resource_types = {
         "psychological_course": "心理健康课程",
@@ -2019,12 +2039,12 @@ with st.container() as tab6:
     resource_type_to_manage = st.selectbox(
         "选择资源类型",
         list(resource_types.values()),
-        key="resource_type_select"
+        key="tab6_resource_select"
     )
     resource_type_key = [k for k, v in resource_types.items() if v == resource_type_to_manage][0]
     
-    # 管理员功能区
-    if is_admin():
+    # 只有管理员登录后，才显示「添加/删除资源」的表单
+    if st.session_state.is_admin:
         st.markdown("#### 📝 资源管理（管理员专属）")
         with st.form("add_resource_form", clear_on_submit=True):
             new_resource = st.text_area(
@@ -2043,7 +2063,7 @@ with st.container() as tab6:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
                 save_shared_resources(st.session_state.custom_psychology_resources)
-                st.success("✅ 资源添加成功！（已同步到所有设备）")
+                st.success("✅ 资源添加成功！已同步到所有设备")
                 st.rerun()
         st.markdown("---")
         
@@ -2055,10 +2075,10 @@ with st.container() as tab6:
                 with col_content:
                     st.markdown(f"🔹 {resource}")
                 with col_delete:
-                    if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
+                    if st.button("🗑️ 删除", key=f"tab6_delete_{resource_type_key}_{idx}"):
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
                         save_shared_resources(st.session_state.custom_psychology_resources)
-                        st.success("✅ 资源已删除！（已同步到所有设备）")
+                        st.success("✅ 资源已删除！已同步到所有设备")
                         st.rerun()
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
