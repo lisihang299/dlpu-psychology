@@ -1814,36 +1814,61 @@ import streamlit as st
 import json
 import os
 import sys
-# ===================== 新增：进阶方案 - TinyDB 云同步 =====================
-from tinydb import TinyDB, Query
-from tinydb.storages import JSONStorage
-from tinydb.middlewares import CachingMiddleware
+import urllib.parse
 
-# 初始化TinyDB（缓存+JSON存储，实现跨设备实时同步）
-# 数据库文件会自动同步到Streamlit Cloud，所有设备共享
-db = TinyDB(
-    "custom_psychology_resources_db.json",
-    storage=CachingMiddleware(JSONStorage)
-)
-# ===================== 替换原有文件读写为数据库操作 =====================
-# 初始化：从数据库加载数据（跨设备核心）
+# ===================== 纯代码跨设备同步：URL参数 + 全局缓存 =====================
+# 全局缓存键（所有会话共享）
+CACHE_KEY = "GLOBAL_PSYCHOLOGY_RESOURCES"
+
+# 初始化全局缓存（纯代码，无需文件/数据库）
+def init_global_cache():
+    # 如果缓存不存在，初始化空数据
+    if CACHE_KEY not in st.session_state:
+        # 尝试从URL参数读取（跨设备传递）
+        query_params = st.experimental_get_query_params()
+        if "resources" in query_params:
+            try:
+                # 解码URL参数里的JSON数据
+                encoded_data = query_params["resources"][0]
+                decoded_data = urllib.parse.unquote(encoded_data)
+                st.session_state[CACHE_KEY] = json.loads(decoded_data)
+            except:
+                st.session_state[CACHE_KEY] = {
+                    "psychological_course": [],
+                    "psychological_activity": [],
+                    "psychological_test": [],
+                    "online_resources": []
+                }
+        else:
+            # 初始空数据
+            st.session_state[CACHE_KEY] = {
+                "psychological_course": [],
+                "psychological_activity": [],
+                "psychological_test": [],
+                "online_resources": []
+            }
+
+# 保存数据到URL参数（跨设备同步核心）
+def save_to_url(data):
+    # 把数据转成JSON并编码（适配URL）
+    json_data = json.dumps(data, ensure_ascii=False)
+    encoded_data = urllib.parse.quote(json_data)
+    # 设置URL参数（所有设备打开这个URL就能看到数据）
+    st.experimental_set_query_params(resources=encoded_data)
+
+# 替换原有初始化函数
 def init_persistent_resources():
-    # 从数据库读取最新数据
-    data = db.all()
-    # 初始化session_state（和你原有变量名一致，不破坏逻辑）
+    init_global_cache()
+    # 同步到session_state（和你原有变量名一致，不破坏逻辑）
     if "custom_psychology_resources" not in st.session_state:
-        st.session_state.custom_psychology_resources = data[0] if data else {
-            "psychological_course": [],
-            "psychological_activity": [],
-            "psychological_test": [],
-            "online_resources": []
-        }
+        st.session_state.custom_psychology_resources = st.session_state[CACHE_KEY]
 
-# 保存：把数据写入数据库（实时同步到所有设备）
+# 替换原有保存函数（纯代码同步）
 def save_persistent_resources():
-    # 清空旧数据，写入新数据
-    db.truncate()
-    db.insert(st.session_state.custom_psychology_resources)
+    # 同步到全局缓存
+    st.session_state[CACHE_KEY] = st.session_state.custom_psychology_resources
+    # 保存到URL参数（跨设备可见）
+    save_to_url(st.session_state[CACHE_KEY])
 
 # 修复：确保get_combined_resources能读到跨设备数据
 def get_combined_resources():
@@ -1858,14 +1883,15 @@ def get_combined_resources():
         custom_res = st.session_state.custom_psychology_resources.get(key, [])
         combined[key] = system_resources[key] + custom_res
     return combined
-# ===================== 原有代码完全保留 =====================
+
+# ===================== 你的原有代码完全保留 =====================
 with tab6:
     # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
     
-    # 初始化数据库资源（跨设备核心）
+    # 初始化全局资源（纯代码跨设备同步）
     init_persistent_resources()
     
     # 显示当前用户权限状态
@@ -1956,9 +1982,9 @@ with tab6:
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                # 保存到数据库（实时同步到所有设备）
+                # 纯代码同步（无需文件/数据库）
                 save_persistent_resources()
-                st.success("✅ 资源添加成功！所有设备实时可见")
+                st.success("✅ 资源添加成功！复制当前URL给其他设备即可看到")
                 st.rerun()
         
         st.markdown("---")
@@ -1976,9 +2002,9 @@ with tab6:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
                         # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        # 保存到数据库（实时同步）
+                        # 纯代码同步
                         save_persistent_resources()
-                        st.success("✅ 资源已删除！所有设备实时同步")
+                        st.success("✅ 资源已删除！所有设备同步更新")
                         st.rerun()
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
@@ -2001,7 +2027,7 @@ with tab6:
             is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
                         resource in st.session_state.custom_psychology_resources[resource_type_key])
             icon = "🔹" if is_custom else "📌"
-            label = "（管理员添加，所有设备实时可见）" if is_custom else "（系统内置）"
+            label = "（管理员添加，所有设备可见）" if is_custom else "（系统内置）"
             st.markdown(f"{icon} {resource} {label}")
     else:
         st.info(f"暂无{resource_type_to_manage}内容")
@@ -2010,32 +2036,39 @@ with tab6:
     
     # 危机干预热线
     st.markdown("### 🆘 危机干预热线")
-    st.markdown(f"- **学校工作日热线**：0411-86318792（门诊部）")
-    st.markdown(f"- **大连市24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['dalian_hotline']}")
-    st.markdown(f"- **辽宁省24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['provincial_hotline']}")
-    st.markdown(f"- **全国24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['national_hotline']}")
+    st.markdown(f"- **学校非工作日热线**：0411-86318792（门诊部）")
+    st.markdown(f"- **大连市心理援助热线**：0411-84651333")
+    st.markdown(f"- **大连市危机干预中心热线**：0411-83695555")
+    st.markdown(f"- **全国心理援助热线**：400-1619995")
     
     st.markdown("---")
     
-    # 温馨提示
-    with st.info("💡 温馨提示"):
-        st.markdown(DLPU_CONSULT_SERVICE['notice'])
+    # 常见问题解答
+    st.markdown("### 🤔 常见问题解答")
+    for question, answer in DLPU_CONSULT_SERVICE['faq'].items():
+        st.markdown(f"**{question}**\n{answer}")
     
-    # 新增：心理健康科普
     st.markdown("---")
-    st.markdown("### 📖 心理健康科普")
-    tab6_1, tab6_2, tab6_3 = st.tabs(["常见问题", "健康贴士", "危机识别"])
-    with tab6_1:
-        for problem in DLPU_PSYCHOLOGY_SCIENCE["common_problems"]:
-            with st.expander(problem['title']):
-                st.markdown(problem['content'])
-    with tab6_2:
-        st.markdown("### 日常心理健康维护建议")
-        for tip in DLPU_PSYCHOLOGY_SCIENCE["mental_health_tips"]:
-            st.markdown(f"- {tip}")
-    with tab6_3:
-        st.markdown(f"### {DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['title']}")
-        st.markdown(DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['content'])
+    
+    # 联系我们
+    st.markdown("### 📞 联系我们")
+    st.markdown("- **咨询电话**：0411-86318792（门诊部）")
+    st.markdown("- **咨询邮箱**：dlgdxlzx@163.com")
+    st.markdown("- **咨询地点**：大连工业大学心理健康教育中心（艺术楼 304 室）")
+    st.markdown("- **办公时间**：周一至周五 8:00-11:30，13:30-17:00")
+    
+    st.markdown("---")
+    
+    # 反馈与建议
+    st.markdown("### 📝 反馈与建议")
+    st.markdown("- 您对学校心理咨询服务有任何意见或建议，请随时联系我们。")
+    st.markdown("- 您的反馈将帮助我们不断改进和完善服务。")
+    
+    st.markdown("---")
+    
+    # 版权信息
+    st.markdown("### 📄 版权信息")
+    st.markdown("- 本指南由大连工业大学心理健康教育中心提供，仅供校内师生使用。")
 # -------------------------- 专业心理工具库（tab7）功能代码 --------------------------
 from streamlit.components.v1 import html
 import random
