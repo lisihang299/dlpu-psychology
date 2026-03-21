@@ -1813,8 +1813,11 @@ import streamlit as st
 import json
 import os
 import threading
+from streamlit.components.v1 import html
+import random
+from datetime import datetime
 
-# ==================== 跨设备持久化核心 ====================
+# ==================== 跨设备持久化核心（必须保留） ====================
 RESOURCES_FILE = "psychology_resources.json"
 file_lock = threading.Lock()
 
@@ -1943,6 +1946,11 @@ if "is_admin" not in st.session_state:
 if "custom_psychology_resources" not in st.session_state:
     st.session_state.custom_psychology_resources = load_shared_resources()
 
+# ==================== 🔥 关键修复：权限判断函数（关联侧边栏状态） ====================
+def is_admin():
+    # 直接读取侧边栏的登录状态，确保权限同步
+    return st.session_state.get("is_admin", False)
+
 # ==================== 合并系统资源+自定义资源 ====================
 def get_combined_resources():
     system_resources = {
@@ -1964,11 +1972,11 @@ with st.sidebar:
         admin_user = st.text_input("管理员账号", value="")
         admin_pwd = st.text_input("管理员密码", type="password", value="")
         if st.button("登录", use_container_width=True):
-            # 这里可以替换为你的真实账号密码校验
+            # 账号密码校验（可替换为真实逻辑）
             if admin_user == "admin" and admin_pwd == "123456":
                 st.session_state.is_admin = True
                 st.success("登录成功！")
-                st.rerun()
+                st.rerun()  # 强制刷新同步状态
             else:
                 st.error("账号或密码错误！")
     else:
@@ -1977,75 +1985,85 @@ with st.sidebar:
             st.session_state.is_admin = False
             st.rerun()
 
-# ==================== tab6 页面渲染（确保在 st.tabs 内部） ====================
-# 假设你的主页面是这样的（如果不是，把下面 with tab6: 替换成你实际的 tab 结构）：
-# tabs = st.tabs(["首页", "咨询", "测评", "科普", "我的", "设置", "心理咨询指南"])
-# tab6 = tabs[6]  # 第7个标签页（索引从0开始）
-
+# ==================== tab6 页面：心理咨询服务指南（完整修复版） ====================
+# 请根据你的实际 tabs 结构替换 tab6（比如 tabs = st.tabs([...]); tab6 = tabs[6]）
 with tab6:
+    # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
     
-    # 权限提示
-    if st.session_state.is_admin:
-        st.success("👑 管理员模式：您可以添加/删除自定义心理资源")
+    # 显示当前用户权限状态
+    if is_admin():
+        st.success("👑 管理员模式：您可以管理所有心理资源")
     else:
-        st.info("💡 提示：您当前以游客身份访问，仅可查看资源内容。如需管理权限，请在左侧 sidebar 登录管理员账号。")
+        st.info("👤 游客模式：您只能查看心理资源内容")
     
     st.markdown("---")
     
     # 服务对象
     st.markdown("### 🎓 服务对象")
-    st.markdown(f"{DLPU_CONSULT_SERVICE['service_object']}")
+    st.markdown(f">{DLPU_CONSULT_SERVICE['service_object']}")
+    
     st.markdown("---")
     
     # 服务类型
     st.markdown("### 📋 服务类型")
     for service in DLPU_CONSULT_SERVICE['service_type']:
         st.markdown(f"- {service}")
+    
     st.markdown("---")
     
     # 预约方式
     st.markdown("### 📱 预约方式")
     for method in DLPU_CONSULT_SERVICE['reservation_method']:
         st.markdown(f"- {method}")
+    
     st.markdown("---")
     
     # 咨询地点和时间
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### 📍 咨询地点")
-        st.markdown(f"{DLPU_CONSULT_SERVICE['consult_address']}")
+        st.markdown(f">{DLPU_CONSULT_SERVICE['consult_address']}")
     with col2:
         st.markdown("### ⏰ 咨询时间")
-        st.markdown(f"{DLPU_CONSULT_SERVICE['consult_time']}")
+        st.markdown(f">{DLPU_CONSULT_SERVICE['consult_time']}")
+    
     st.markdown("---")
     
     # 服务原则
     st.markdown("### 📜 服务原则")
     for principle in DLPU_CONSULT_SERVICE['service_principle']:
         st.markdown(f"- {principle}")
+    
     st.markdown("---")
     
-    # 校园心理资源 + 管理员操作
+    # 校园心理资源（严格的权限控制）
     st.markdown("### 📚 校园心理资源")
+    
+    # 资源类型选择
     resource_types = {
         "psychological_course": "心理健康课程",
         "psychological_activity": "心理健康活动", 
         "psychological_test": "心理测评工具",
         "online_resources": "线上资源"
     }
+    
     resource_type_to_manage = st.selectbox(
         "选择资源类型",
         list(resource_types.values()),
-        key="tab6_resource_select"
+        key="resource_type_select"
     )
+    
+    # 获取对应的键
     resource_type_key = [k for k, v in resource_types.items() if v == resource_type_to_manage][0]
     
-    # 只有管理员登录后，才显示「添加/删除资源」的表单
-    if st.session_state.is_admin:
+    # 只有管理员才能看到资源管理功能
+    if is_admin():
         st.markdown("#### 📝 资源管理（管理员专属）")
+        
+        # 添加资源表单
         with st.form("add_resource_form", clear_on_submit=True):
             new_resource = st.text_area(
                 "新增资源内容", 
@@ -2059,37 +2077,52 @@ with tab6:
                 clear_form = st.form_submit_button("🗑️ 清空内容", use_container_width=True)
             
             if submit_add and new_resource.strip():
+                # 添加资源到自定义资源列表
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
+                # 🔥 关键修复：保存到JSON文件，避免数据丢失
                 save_shared_resources(st.session_state.custom_psychology_resources)
-                st.success("✅ 资源添加成功！已同步到所有设备")
+                st.success("✅ 资源添加成功！")
                 st.rerun()
+        
         st.markdown("---")
         
+        # 显示自定义资源（管理员可以管理）
         st.markdown("#### 🔧 自定义资源管理")
         if (resource_type_key in st.session_state.custom_psychology_resources and 
             st.session_state.custom_psychology_resources[resource_type_key]):
+            
             for idx, resource in enumerate(st.session_state.custom_psychology_resources[resource_type_key]):
                 col_content, col_delete = st.columns([5, 1])
                 with col_content:
                     st.markdown(f"🔹 {resource}")
                 with col_delete:
-                    if st.button("🗑️ 删除", key=f"tab6_delete_{resource_type_key}_{idx}"):
+                    if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
+                        # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
+                        # 🔥 关键修复：保存删除后的结果
                         save_shared_resources(st.session_state.custom_psychology_resources)
-                        st.success("✅ 资源已删除！已同步到所有设备")
+                        st.success("✅ 资源已删除！")
                         st.rerun()
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
+    else:
+        # 游客只能查看，完全隐藏编辑功能
+        st.markdown("#### 📋 资源查看")
+        st.info("💡 提示：您当前以游客身份访问，只能查看资源内容。如需管理权限，请使用管理员账号登录。")
+    
     st.markdown("---")
     
-    # 完整资源列表（系统+自定义）
+    # 显示完整的资源列表（所有用户可见）
     st.markdown(f"#### 📋 完整的{resource_type_to_manage}列表")
+    
     combined_resources = get_combined_resources()
     all_resources = combined_resources[resource_type_key]
+    
     if all_resources:
         for resource in all_resources:
+            # 标记自定义资源
             is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
                         resource in st.session_state.custom_psychology_resources[resource_type_key])
             icon = "🔹" if is_custom else "📌"
@@ -2097,23 +2130,24 @@ with tab6:
             st.markdown(f"{icon} {resource} {label}")
     else:
         st.info(f"暂无{resource_type_to_manage}内容")
+    
     st.markdown("---")
     
     # 危机干预热线
     st.markdown("### 🆘 危机干预热线")
-    st.markdown(f"- 学校工作日热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['school_hotline']}")
-    st.markdown(f"- 学校24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['school_24h_hotline']}")
-    st.markdown(f"- 大连市24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['dalian_hotline']}")
-    st.markdown(f"- 辽宁省24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['provincial_hotline']}")
-    st.markdown(f"- 全国24小时热线：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['national_hotline']}")
+    st.markdown(f"- **学校工作日热线**：0411-86318792（门诊部）")
+    st.markdown(f"- **大连市24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['dalian_hotline']}")
+    st.markdown(f"- **辽宁省24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['provincial_hotline']}")
+    st.markdown(f"- **全国24小时热线**：{DLPU_PSYCHOLOGY_RESOURCES['crisis_hotline']['national_hotline']}")
+    
     st.markdown("---")
     
     # 温馨提示
     with st.info("💡 温馨提示"):
         st.markdown(DLPU_CONSULT_SERVICE['notice'])
-    st.markdown("---")
     
-    # 心理健康科普
+    # 新增：心理健康科普
+    st.markdown("---")
     st.markdown("### 📖 心理健康科普")
     tab6_1, tab6_2, tab6_3 = st.tabs(["常见问题", "健康贴士", "危机识别"])
     with tab6_1:
@@ -2127,6 +2161,65 @@ with tab6:
     with tab6_3:
         st.markdown(f"### {DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['title']}")
         st.markdown(DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['content'])
+
+# -------------------------- 专业心理工具库（tab7）功能代码 --------------------------
+# 动态呼吸训练可视化组件（HTML+JS实现，适配Streamlit）
+def breathing_visualization():
+    """4-7-8呼吸法可视化引导组件"""
+    breathing_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            .breathing-circle {
+                width: 200px;
+                height: 200px;
+                border-radius: 50%;
+                background-color: #4F9E54;
+                margin: 20px auto;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                color: white;
+                font-size: 20px;
+                font-weight: bold;
+                animation: breathe 19s infinite ease-in-out;
+            }
+            @keyframes breathe {
+                0% { transform: scale(0.8); background-color: #4F9E54; }
+                21% { transform: scale(1.2); background-color: #2E7D32; }
+                58% { transform: scale(1.2); background-color: #2E7D32; }
+                100% { transform: scale(0.8); background-color: #4F9E54; }
+            }
+            .instruction {
+                text-align: center;
+                font-size: 16px;
+                color: #333;
+                margin-top: 20px;
+            }
+            .step {
+                margin: 5px 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="breathing-circle">吸气</div>
+        <div class="instruction">
+            <div class="step">4秒吸气 → 7秒屏息 → 8秒呼气</div>
+            <div class="step">跟随圆圈的缩放节奏，用鼻子吸气，嘴巴呼气</div>
+        </div>
+        <script>
+            const circle = document.querySelector('.breathing-circle');
+            setInterval(() => {
+                circle.textContent = "吸气";
+                setTimeout(() => circle.textContent = "屏息", 4000);
+                setTimeout(() => circle.textContent = "呼气", 11000);
+            }, 19000);
+        </script>
+    </body>
+    </html>
+    """
+    return html(breathing_html, height=350)
 # -------------------------- 专业心理工具库（tab7）功能代码 --------------------------
 from streamlit.components.v1 import html
 import random
