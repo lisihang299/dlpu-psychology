@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "submit_time": "2026-02-15 10:53:18",
+    "teacher": "梁瑛楠",
+    "user_name": "李思航",
+    "user_id": "211422200601033817",
+    "user_gender": "男",
+    "user_phone": "13842948025",
+    "user_email": "3879463394@qq.com",
+    "user_grade": "电信242",
+    "appointment_time": "2026-02-16 09:00",
+    "appointment_type": "个体心理咨询",
+    "problem_type": "情绪压力",
+    "emergency_level": "一般",
+    "note": "",
+    "status": "已取消"
+  }
+]
