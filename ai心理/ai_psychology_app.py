@@ -2846,457 +2846,501 @@ with tab7:
         st.header("🔍 多模态情绪识别（面部/语音）")
         multimodal_emotion_recognition()
     with tool6:
-    import streamlit as st
-    import datetime
-    import random
-    import string
-    from PIL import Image
-    import io
-    import base64
-    import json
-    import os
-    import threading
+        import streamlit as st
+        import datetime
+        import random
+        import string
+        from PIL import Image
+        import io
+        import base64
+        import json
+        import os
+        import threading  # 用于文件锁，防止并发读写冲突
 
-    # ==================== 关键：绑定真实账号（替换这里的字段名！） ====================
-    # 👇 把 "visitor" 改成你系统里实际的账号字段名（比如username/visitor/user_id）
-    REAL_USER_FIELD = "visitor"  
-    
-    # 获取真实账号，无随机、无兜底
-    if REAL_USER_FIELD in st.session_state and st.session_state[REAL_USER_FIELD]:
-        CURRENT_USER = str(st.session_state[REAL_USER_FIELD])
-    else:
-        st.error("⚠️ 请先登录后使用树洞功能！")
-        st.stop()
-    
-    # 管理员判断（账号为admin则拥有全部删除权限）
-    IS_ADMIN = CURRENT_USER == "admin"
-
-    # ==================== 基础配置 ====================
-    st.set_page_config(
-        page_title="工大情绪树洞",
-        page_icon="🌳",
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
-
-    DATA_FILE = "tree_hole_data.json"
-    file_lock = threading.Lock()
-
-    # 数据读写函数
-    def load_shared_data():
-        with file_lock:
-            if os.path.exists(DATA_FILE):
-                try:
-                    with open(DATA_FILE, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        if "posts" not in data:
-                            data["posts"] = []
-                        if "responses_used" not in data:
-                            data["responses_used"] = []
-                        return data
-                except Exception as e:
-                    st.error(f"加载数据出错: {e}")
-                    return {"posts": [], "responses_used": []}
-            else:
-                return {"posts": [], "responses_used": []}
-
-    def save_shared_data(data):
-        with file_lock:
-            try:
-                with open(DATA_FILE, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                st.error(f"保存数据失败: {e}")
-
-    # 会话状态初始化
-    if "tree_hole_temp" not in st.session_state:
-        st.session_state.tree_hole_temp = {
-            "content": "", "emotion_tag": "焦虑", "nickname": "", "images": []
-        }
-    if "tree_hole_sensitive" not in st.session_state:
-        st.session_state.tree_hole_sensitive = []
-
-    # ==================== CSS样式（完整保留） ====================
-    st.markdown("""
-    <style>
-    .stApp > header { display: none !important; }
-    .stApp > div:first-child > div:first-child { display: none !important; }
-    .tree-hole-container {
-        background: #ffffff !important;
-        padding: 12px 16px;
-        margin: 0;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    .post-card {
-        background: #ffffff !important;
-        border: 1px solid #f0e9df;
-        border-radius: 12px;
-        padding: 14px;
-        box-shadow: 0 1px 4px rgba(224, 214, 203, 0.1);
-        margin-bottom: 10px;
-    }
-    .content-card {
-        background: #ffffff !important;
-        border: 1px solid #f0e9df;
-        border-radius: 12px;
-        padding: 12px;
-        box-shadow: 0 1px 4px rgba(224, 214, 203, 0.1);
-        margin-bottom: 8px;
-        border-left: 4px solid #e8dcca;
-    }
-    .post-images-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
-        margin: 8px 0;
-    }
-    .post-image {
-        width: 100%;
-        border-radius: 8px;
-        border: 1px solid #f0e9df;
-        object-fit: cover;
-    }
-    .stButton>button {
-        background: #e8dcca !important;
-        color: #5a4b3c !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 6px 12px !important;
-        font-size: 13px !important;
-        white-space: nowrap !important;
-        transition: all 0.2s ease !important;
-    }
-    .stButton>button:hover {
-        background: #d9c8b4 !important;
-        border: none !important;
-    }
-    .admin-delete-btn>button {
-        background: #f8d7da !important;
-        color: #721c24 !important;
-        min-width: 50px !important;
-        font-size: 11px !important;
-    }
-    .admin-delete-btn>button:hover {
-        background: #f5c6cb !important;
-    }
-    .stTextInput>div>div>input, 
-    .stTextArea>div>div>textarea,
-    .stSelectbox>div>div>select,
-    .stFileUploader>div>div>button {
-        border-radius: 8px !important;
-        border: 1px solid #e8dcca !important;
-        padding: 6px !important;
-        background: #ffffff !important;
-        font-size: 13px !important;
-    }
-    .warm-text {
-        color: #7d6b57;
-        line-height: 1.5;
-        font-size: 13px;
-    }
-    .admin-tip {
-        color: #856404;
-        font-size: 11px;
-        text-align: center;
-        margin: 2px 0;
-    }
-    .empty-tip {
-        text-align: center;
-        padding: 16px;
-        color: #948675;
-        font-size: 13px;
-        background: #ffffff;
-        border: 1px solid #f0e9df;
-        border-radius: 12px;
-    }
-    .stMarkdown { margin-bottom: 4px !important; }
-    .stColumn { gap: 8px !important; }
-    .stExpander { padding: 0 !important; }
-    .stTextArea { margin-bottom: 6px !important; }
-    .stFileUploader { margin-bottom: 6px !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # ==================== 页面主体 ====================
-    st.markdown('<div class="tree-hole-container">', unsafe_allow_html=True)
-    st.markdown('<h2 style="color:#5a4b3c; text-align:center; margin:0 0 4px 0; font-size:20px;">🌳 工大情绪树洞</h2>', unsafe_allow_html=True)
-    st.markdown('<p class="warm-text" style="text-align:center; margin:0 0 2px 0;">用善意倾诉，用温暖回应</p>', unsafe_allow_html=True)
-    st.markdown('<p class="admin-tip">💡 请发表友善言论，良言一句三冬暖，恶语相向六月寒</p>', unsafe_allow_html=True)
-    st.markdown("<hr style='margin:6px 0; border-color:#f0e9df;'>", unsafe_allow_html=True)
-
-    shared_data = load_shared_data()
-
-    # 管理员调试信息
-    if IS_ADMIN:
-        st.markdown(f'<p class="admin-tip">🔧 管理员模式 | 当前账号：{CURRENT_USER} | 帖子总数：{len(shared_data["posts"])}</p>', unsafe_allow_html=True)
-
-    # ==================== 辅助函数 ====================
-    def get_campus_response(emotion):
-        responses = {
-            "焦虑": [
-                "工大的湖畔晚风超治愈～试试腹式呼吸，慢慢调整✨",
-                "心理咨询室老师超温柔（0411-86318792），别怕求助❤️",
-                "图书馆靠窗位，适合静下心梳理烦恼📖"
-            ],
-            "难过": [
-                "抱抱你～食堂热汤面能温暖此刻的你🤗",
-                "去银杏道走走，晚霞会抚平小情绪🌿",
-                "情绪没有对错，难过就说出来～"
-            ],
-            "烦躁": [
-                "体育馆打球出汗，烦恼会一起跑掉💪",
-                "5分钟正念冥想，平复情绪超管用🧘",
-                "和室友唠唠，工大伙伴都是暖心搭子～"
-            ],
-            "迷茫": [
-                "生涯咨询老师超专业，聊聊会清晰很多🌟",
-                "学校有超多资源，慢慢来不着急～",
-                "每一步成长都值得肯定✨"
-            ],
-            "孤独": [
-                "加入社团吧，志同道合的伙伴在等你🌟",
-                "树洞小屋每周开放，有人愿意听你说❤️",
-                "食堂一起干饭，就能感受温暖～"
-            ],
-            "其他": [
-                "工大永远是你的温柔港湾💛",
-                "接纳自己的情绪，慢慢来～",
-                "日子会慢慢亮起来的✨"
-            ]
-        }
-        all_res = responses.get(emotion, responses["其他"])
-        unused = [r for r in all_res if r not in shared_data["responses_used"]]
-        if not unused:
-            shared_data["responses_used"] = []
-            unused = all_res
-        res = random.choice(unused)
-        shared_data["responses_used"].append(res)
-        save_shared_data(shared_data)
-        return res
-
-    def check_sensitive_words(content):
-        for word in st.session_state.tree_hole_sensitive:
-            if word in content.lower():
-                return True, word
-        return False, None
-
-    def image_to_base64(img):
-        if img is None:
-            return None
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        byte_data = buf.getvalue()
-        return base64.b64encode(byte_data).decode()
-
-    # ==================== 分栏布局：发布+展示 ====================
-    col1, col2 = st.columns([1, 2], gap="medium")
-
-    # 左侧发布区
-    with col1:
-        st.markdown('<div class="post-card">', unsafe_allow_html=True)
-        st.markdown('<h4 style="color:#5a4b3c; margin-bottom:8px; font-size:15px;">✍️ 匿名倾诉</h4>', unsafe_allow_html=True)
-        
-        # 昵称输入
-        nickname = st.text_input(
-            "✨ 匿名昵称（选填）", 
-            placeholder="如：工大追梦人", 
-            value=st.session_state.tree_hole_temp["nickname"]
+        # ==================== 全局配置 ====================
+        st.set_page_config(
+            page_title="工大情绪树洞",
+            page_icon="🌳",
+            layout="wide",
+            initial_sidebar_state="collapsed"
         )
-        st.session_state.tree_hole_temp["nickname"] = nickname if nickname else f"工大暖心人{len(shared_data['posts'])+1}"
-        
-        # 情绪选择
-        emotion_tag = st.selectbox(
-            "💛 我的情绪", 
-            ["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"], 
-            index=["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"].index(st.session_state.tree_hole_temp["emotion_tag"])
-        )
-        st.session_state.tree_hole_temp["emotion_tag"] = emotion_tag
-        
-        # 内容输入
-        content = st.text_area(
-            "💬 想说的话", 
-            placeholder="在这里写下你的心情吧...\n可以搭配多张图片分享哦～", 
-            height=100, 
-            value=st.session_state.tree_hole_temp["content"]
-        )
-        st.session_state.tree_hole_temp["content"] = content
-        
-        # 图片上传
-        uploaded_files = st.file_uploader(
-            "🖼️ 上传图片（可多选）", 
-            type=["png", "jpg", "jpeg"], 
-            key="th_images",
-            accept_multiple_files=True
-        )
-        images = []
-        if uploaded_files:
-            for uploaded_file in uploaded_files:
-                img = Image.open(uploaded_file)
-                images.append(img)
-            st.session_state.tree_hole_temp["images"] = images
-            st.markdown('<div class="post-images-grid">', unsafe_allow_html=True)
-            for img in images:
-                st.image(img, use_column_width=True, clamp=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.session_state.tree_hole_temp["images"] = []
-        
-        # 发布按钮（绑定真实账号）
-        if st.button("🚀 把心情交给树洞", use_container_width=True, key="th_post"):
-            if not content.strip() and not uploaded_files:
-                st.warning("⚠️ 倾诉内容或图片不能为空哦～")
-            else:
-                has_sensitive, word = check_sensitive_words(content)
-                if has_sensitive:
-                    st.error(f"❌ 内容包含违规词「{word}」，请修改后发布～")
+
+        DATA_FILE = "tree_hole_data.json"
+        # 全局锁：确保同一时间只有一个线程读写JSON文件
+        file_lock = threading.Lock()
+
+        # ==================== 核心：每次都重新加载共享数据 ====================
+        def load_shared_data():
+            """每次调用都从磁盘重新读取，保证数据最新"""
+            with file_lock:
+                if os.path.exists(DATA_FILE):
+                    try:
+                        with open(DATA_FILE, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            if "posts" not in data:
+                                data["posts"] = []
+                            if "responses_used" not in data:
+                                data["responses_used"] = []
+                            return data
+                    except Exception as e:
+                        st.error(f"加载数据出错: {e}")
+                        return {"posts": [], "responses_used": []}
                 else:
-                    images_b64 = [image_to_base64(img) for img in st.session_state.tree_hole_temp["images"]]
-                    post_data = {
-                        "id": len(shared_data["posts"])+1,
-                        "nickname": st.session_state.tree_hole_temp["nickname"],
-                        "emotion": emotion_tag,
-                        "content": content.strip(),
-                        "images": images_b64,
-                        "create_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "like_count": 0,
-                        "comments": [],
-                        "response": get_campus_response(emotion_tag),
-                        "publisher_id": CURRENT_USER  # 核心：绑定真实账号
-                    }
-                    shared_data["posts"].append(post_data)
-                    save_shared_data(shared_data)
-                    st.success("🎉 发布成功！树洞接住了你的小情绪～")
-                    st.balloons()
-                    # 清空临时数据
-                    st.session_state.tree_hole_temp = {
-                        "content": "", "emotion_tag": "焦虑", "nickname": "", "images": []
-                    }
-                    st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+                    return {"posts": [], "responses_used": []}
 
-    # 右侧展示区
-    with col2:
-        st.markdown('<h4 style="color:#5a4b3c; margin-bottom:4px; font-size:15px;">🌟 树洞回音</h4>', unsafe_allow_html=True)
-        st.markdown('<p class="warm-text">看看工大伙伴们的暖心分享～</p>', unsafe_allow_html=True)
+        def save_shared_data(data):
+            """保存时加锁，确保写入完整"""
+            with file_lock:
+                try:
+                    with open(DATA_FILE, "w", encoding="utf-8") as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    st.error(f"保存数据失败: {e}")
+
+        # ==================== 会话状态初始化（复用系统原有登录标识） ====================
+        # 初始化树洞临时数据
+        if "tree_hole_temp" not in st.session_state:
+            st.session_state.tree_hole_temp = {
+                "content": "", "emotion_tag": "焦虑", "nickname": "", "images": []
+            }
+        if "tree_hole_sensitive" not in st.session_state:
+            st.session_state.tree_hole_sensitive = []
         
-        # 情绪筛选
-        filter_emotion = st.selectbox("筛选情绪", ["全部"] + ["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"], label_visibility="collapsed")
-        posts = shared_data["posts"][::-1]
-        if filter_emotion != "全部":
-            posts = [p for p in posts if p["emotion"] == filter_emotion]
+        # 核心：复用系统原有登录标识（根据你的界面显示，系统已存在用户身份标识）
+        # 适配你的场景：从系统现有session中提取用户唯一标识（如用户名/游客ID）
+        # 优先级：1. 系统登录用户名 2. 游客标识 3. 兜底生成唯一标识
+        if "user_unique_id" not in st.session_state:
+            # === 关键：替换这里的逻辑为你系统实际的用户标识获取方式 ===
+            # 示例：假设你的系统用以下key存储用户身份，你可根据实际情况修改
+            if "username" in st.session_state and st.session_state.username:
+                # 已登录用户：用系统用户名作为唯一标识
+                st.session_state.user_unique_id = st.session_state.username
+            elif "visitor_id" in st.session_state and st.session_state.visitor_id:
+                # 游客：用系统游客ID作为唯一标识
+                st.session_state.user_unique_id = st.session_state.visitor_id
+            else:
+                # 兜底：兼容无系统标识的情况，生成唯一标识
+                timestamp = str(datetime.datetime.now().timestamp()).replace(".", "")
+                random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+                st.session_state.user_unique_id = f"visitor_{timestamp}_{random_str}"
         
-        # 空数据提示
-        if len(posts) == 0:
-            st.markdown('<div class="empty-tip">', unsafe_allow_html=True)
-            st.markdown("💡 还没有树洞哦～")
-            st.markdown("发布第一条心情，开启治愈之旅吧✨")
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            for post in posts:
-                st.markdown('<div class="content-card">', unsafe_allow_html=True)
-                
-                # 帖子头部：昵称+时间+删除按钮
-                post_head1, post_head2, post_head3 = st.columns([3, 1, 1])
-                with post_head1:
-                    st.markdown(f'<span style="color:#5a4b3c; font-weight:500;">{post["nickname"]}</span> '
-                                f'<span style="color:#948675; font-size:11px; background:#f0e9df; padding:2px 5px; border-radius:3px;">📌 {post["emotion"]}</span>',
-                                unsafe_allow_html=True)
-                with post_head2:
-                    st.markdown(f'<span style="color:#a89988; font-size:10px; text-align:right; display:block;">{post["create_time"]}</span>',
-                                unsafe_allow_html=True)
-                with post_head3:
-                    # 仅发布者/管理员可删
-                    can_delete = IS_ADMIN or (post.get("publisher_id") == CURRENT_USER)
-                    if can_delete:
-                        st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
-                        if st.button("🗑️ 删除", key=f"del_post_{post['id']}", use_container_width=True):
-                            shared_data = load_shared_data()
-                            shared_data["posts"] = [p for p in shared_data["posts"] if p["id"] != post["id"]]
-                            save_shared_data(shared_data)
-                            st.success("✅ 已删除该帖子")
-                            st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
-                
-                # 帖子内容
-                if post["content"]:
-                    st.markdown(f'<p class="warm-text" style="margin:6px 0;">{post["content"]}</p>', unsafe_allow_html=True)
-                
-                # 帖子图片
-                if post["images"] and len(post["images"]) > 0:
-                    st.markdown('<div class="post-images-grid">', unsafe_allow_html=True)
-                    for img_b64 in post["images"]:
-                        if img_b64:
-                            st.markdown(f'<img src="data:image/png;base64,{img_b64}" class="post-image">', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                # 暖心回复
-                st.markdown(f'<div style="background:#f9f5f0; padding:6px; border-radius:8px; margin:6px 0;">'
-                            f'<span style="color:#7d6b57; font-size:11px;">💬 工大暖心回应：</span>'
-                            f'<span class="warm-text"> {post["response"]}</span>'
-                            f'</div>', unsafe_allow_html=True)
-                
-                # 点赞+评论
-                interact1, interact2 = st.columns([1,4])
-                with interact1:
-                    if st.button(f"❤️ {post['like_count']}", key=f"like_{post['id']}", use_container_width=True):
-                        shared_data = load_shared_data()
-                        for p in shared_data["posts"]:
-                            if p["id"] == post["id"]:
-                                p["like_count"] += 1
-                                break
-                        save_shared_data(shared_data)
-                        st.rerun()
-                with interact2:
-                    c_col1, c_col2 = st.columns([4,1])
-                    with c_col1:
-                        comment = st.text_input("留下你的鼓励～", placeholder="加油！一切都会好起来的✨", key=f"cmt_{post['id']}", label_visibility="collapsed")
-                    with c_col2:
-                        if st.button("发送", key=f"send_cmt_{post['id']}", use_container_width=True):
-                            if comment.strip():
-                                has_sensitive, word = check_sensitive_words(comment)
-                                if has_sensitive:
-                                    st.error(f"❌ 评论含违规词「{word}」，请修改后发送～")
-                                else:
-                                    shared_data = load_shared_data()
-                                    for p in shared_data["posts"]:
-                                        if p["id"] == post["id"]:
-                                            p["comments"].append({
-                                                "nickname": "工大暖心小伙伴",
-                                                "content": comment.strip(),
-                                                "time": datetime.datetime.now().strftime("%H:%M:%S"),
-                                                "commenter_id": CURRENT_USER
-                                            })
-                                            break
-                                    save_shared_data(shared_data)
-                                    st.success("💖 你的鼓励已送达～")
-                                    st.rerun()
-                
-                # 评论列表
-                if post["comments"]:
-                    st.markdown('<p class="warm-text" style="font-size:11px; margin-top:6px; font-weight:500;">📝 暖心评论：</p>', unsafe_allow_html=True)
-                    for idx, cmt in enumerate(post["comments"]):
-                        cmt_col1, cmt_col2 = st.columns([5,1])
-                        with cmt_col1:
-                            st.markdown(f'<div style="margin-left:6px; font-size:11px; padding:3px 0;">'
-                                        f'<span style="color:#7d6b57; font-weight:500;">{cmt["nickname"]}</span> '
-                                        f'<span style="color:#a89988;">({cmt["time"]})</span>：'
-                                        f'<span class="warm-text">{cmt["content"]}</span>'
-                                        f'</div>', unsafe_allow_html=True)
-                        with cmt_col2:
-                            # 评论删除权限
-                            can_del_cmt = IS_ADMIN or (cmt.get("commenter_id") == CURRENT_USER)
-                            if can_del_cmt:
-                                st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
-                                if st.button("🗑️", key=f"del_cmt_{post['id']}_{idx}", use_container_width=True):
-                                    shared_data = load_shared_data()
-                                    for p in shared_data["posts"]:
-                                        if p["id"] == post["id"]:
-                                            del p["comments"][idx]
-                                            break
-                                    save_shared_data(shared_data)
-                                    st.success("✅ 已删除该评论")
-                                    st.rerun()
-                                st.markdown('</div>', unsafe_allow_html=True)
+        # 管理员标识（根据你系统实际的管理员判断逻辑修改）
+        if "is_admin" not in st.session_state:
+            # 示例：系统中用户名是admin则为管理员，你可替换为实际逻辑
+            st.session_state.is_admin = st.session_state.user_unique_id == "admin"
+
+        # ==================== 核心CSS（保持不变） ====================
+        st.markdown("""
+        <style>
+        .stApp > header { display: none !important; }
+        .stApp > div:first-child > div:first-child { display: none !important; }
+        .tree-hole-container {
+            background: #ffffff !important;
+            padding: 12px 16px;
+            margin: 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .post-card {
+            background: #ffffff !important;
+            border: 1px solid #f0e9df;
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 1px 4px rgba(224, 214, 203, 0.1);
+            margin-bottom: 10px;
+        }
+        .content-card {
+            background: #ffffff !important;
+            border: 1px solid #f0e9df;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 1px 4px rgba(224, 214, 203, 0.1);
+            margin-bottom: 8px;
+            border-left: 4px solid #e8dcca;
+        }
+        .post-images-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin: 8px 0;
+        }
+        .post-image {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #f0e9df;
+            object-fit: cover;
+        }
+        .stButton>button {
+            background: #e8dcca !important;
+            color: #5a4b3c !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 6px 12px !important;
+            font-size: 13px !important;
+            white-space: nowrap !important;
+            transition: all 0.2s ease !important;
+        }
+        .stButton>button:hover {
+            background: #d9c8b4 !important;
+            border: none !important;
+        }
+        .admin-delete-btn>button {
+            background: #f8d7da !important;
+            color: #721c24 !important;
+            min-width: 50px !important;
+            font-size: 11px !important;
+        }
+        .admin-delete-btn>button:hover {
+            background: #f5c6cb !important;
+        }
+        .stTextInput>div>div>input, 
+        .stTextArea>div>div>textarea,
+        .stSelectbox>div>div>select,
+        .stFileUploader>div>div>button {
+            border-radius: 8px !important;
+            border: 1px solid #e8dcca !important;
+            padding: 6px !important;
+            background: #ffffff !important;
+            font-size: 13px !important;
+        }
+        .warm-text {
+            color: #7d6b57;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+        .admin-tip {
+            color: #856404;
+            font-size: 11px;
+            text-align: center;
+            margin: 2px 0;
+        }
+        .empty-tip {
+            text-align: center;
+            padding: 16px;
+            color: #948675;
+            font-size: 13px;
+            background: #ffffff;
+            border: 1px solid #f0e9df;
+            border-radius: 12px;
+        }
+        .stMarkdown { margin-bottom: 4px !important; }
+        .stColumn { gap: 8px !important; }
+        .stExpander { padding: 0 !important; }
+        .stTextArea { margin-bottom: 6px !important; }
+        .stFileUploader { margin-bottom: 6px !important; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # ==================== 页面主体（直接使用系统登录状态） ====================
+        st.markdown('<div class="tree-hole-container">', unsafe_allow_html=True)
+
+        # 标题区
+        st.markdown('<h2 style="color:#5a4b3c; text-align:center; margin:0 0 4px 0; font-size:20px;">🌳 工大情绪树洞</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="warm-text" style="text-align:center; margin:0 0 2px 0;">用善意倾诉，用温暖回应</p>', unsafe_allow_html=True)
+        st.markdown('<p class="admin-tip">💡 请发表友善言论，良言一句三冬暖，恶语相向六月寒</p>', unsafe_allow_html=True)
+        st.markdown("<hr style='margin:6px 0; border-color:#f0e9df;'>", unsafe_allow_html=True)
+
+        # 每次渲染都重新加载最新数据
+        shared_data = load_shared_data()
+
+        # 调试信息（仅管理员可见）
+        if st.session_state.is_admin:
+            st.markdown(f'<p class="admin-tip">🔧 管理员调试：当前共有 {len(shared_data["posts"])} 条帖子（实时同步）</p>', unsafe_allow_html=True)
+
+        # ==================== 辅助函数（保持不变） ====================
+        # 暖心回应生成
+        def get_campus_response(emotion):
+            responses = {
+                "焦虑": [
+                    "工大的湖畔晚风超治愈～试试腹式呼吸，慢慢调整✨",
+                    "心理咨询室老师超温柔（0411-86318792），别怕求助❤️",
+                    "图书馆靠窗位，适合静下心梳理烦恼📖"
+                ],
+                "难过": [
+                    "抱抱你～食堂热汤面能温暖此刻的你🤗",
+                    "去银杏道走走，晚霞会抚平小情绪🌿",
+                    "情绪没有对错，难过就说出来～"
+                ],
+                "烦躁": [
+                    "体育馆打球出汗，烦恼会一起跑掉💪",
+                    "5分钟正念冥想，平复情绪超管用🧘",
+                    "和室友唠唠，工大伙伴都是暖心搭子～"
+                ],
+                "迷茫": [
+                    "生涯咨询老师超专业，聊聊会清晰很多🌟",
+                    "学校有超多资源，慢慢来不着急～",
+                    "每一步成长都值得肯定✨"
+                ],
+                "孤独": [
+                    "加入社团吧，志同道合的伙伴在等你🌟",
+                    "树洞小屋每周开放，有人愿意听你说❤️",
+                    "食堂一起干饭，就能感受温暖～"
+                ],
+                "其他": [
+                    "工大永远是你的温柔港湾💛",
+                    "接纳自己的情绪，慢慢来～",
+                    "日子会慢慢亮起来的✨"
+                ]
+            }
+            all_res = responses.get(emotion, responses["其他"])
+            unused = [r for r in all_res if r not in shared_data["responses_used"]]
+            if not unused:
+                shared_data["responses_used"] = []
+                unused = all_res
+            res = random.choice(unused)
+            shared_data["responses_used"].append(res)
+            save_shared_data(shared_data)
+            return res
+
+        # 违规词检测
+        def check_sensitive_words(content):
+            for word in st.session_state.tree_hole_sensitive:
+                if word in content.lower():
+                    return True, word
+            return False, None
+
+        # 图片转base64
+        def image_to_base64(img):
+            if img is None:
+                return None
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            byte_data = buf.getvalue()
+            return base64.b64encode(byte_data).decode()
+
+        # ==================== 分栏布局：发布区 + 展示区 ====================
+        col1, col2 = st.columns([1, 2], gap="medium")
+
+        # 左侧：发布区（绑定系统用户唯一标识）
+        with col1:
+            st.markdown('<div class="post-card">', unsafe_allow_html=True)
+            st.markdown('<h4 style="color:#5a4b3c; margin-bottom:8px; font-size:15px;">✍️ 匿名倾诉</h4>', unsafe_allow_html=True)
+            
+            # 匿名昵称
+            nickname = st.text_input(
+                "✨ 匿名昵称（选填）", 
+                placeholder="如：工大追梦人", 
+                value=st.session_state.tree_hole_temp["nickname"]
+            )
+            st.session_state.tree_hole_temp["nickname"] = nickname if nickname else f"工大暖心人{len(shared_data['posts'])+1}"
+            
+            # 情绪标签
+            emotion_tag = st.selectbox(
+                "💛 我的情绪", 
+                ["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"], 
+                index=["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"].index(st.session_state.tree_hole_temp["emotion_tag"])
+            )
+            st.session_state.tree_hole_temp["emotion_tag"] = emotion_tag
+            
+            # 倾诉内容
+            content = st.text_area(
+                "💬 想说的话", 
+                placeholder="在这里写下你的心情吧...\n可以搭配多张图片分享哦～", 
+                height=100, 
+                value=st.session_state.tree_hole_temp["content"]
+            )
+            st.session_state.tree_hole_temp["content"] = content
+            
+            # 图片上传
+            uploaded_files = st.file_uploader(
+                "🖼️ 上传图片（可多选）", 
+                type=["png", "jpg", "jpeg"], 
+                key="th_images",
+                accept_multiple_files=True
+            )
+            images = []
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    img = Image.open(uploaded_file)
+                    images.append(img)
+                st.session_state.tree_hole_temp["images"] = images
+                st.markdown('<div class="post-images-grid">', unsafe_allow_html=True)
+                for img in images:
+                    st.image(img, use_column_width=True, clamp=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.session_state.tree_hole_temp["images"] = []
+            
+            # 发布按钮
+            if st.button("🚀 把心情交给树洞", use_container_width=True, key="th_post"):
+                if not content.strip() and not uploaded_files:
+                    st.warning("⚠️ 倾诉内容或图片不能为空哦～")
+                else:
+                    has_sensitive, word = check_sensitive_words(content)
+                    if has_sensitive:
+                        st.error(f"❌ 内容包含违规词「{word}」，请修改后发布～")
+                    else:
+                        images_b64 = [image_to_base64(img) for img in st.session_state.tree_hole_temp["images"]]
+                        post_data = {
+                            "id": len(shared_data["posts"])+1,
+                            "nickname": st.session_state.tree_hole_temp["nickname"],
+                            "emotion": emotion_tag,
+                            "content": content.strip(),
+                            "images": images_b64,
+                            "create_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "like_count": 0,
+                            "comments": [],
+                            "response": get_campus_response(emotion_tag),
+                            # 核心：绑定系统用户唯一标识（而非临时会话）
+                            "publisher_id": st.session_state.user_unique_id
+                        }
+                        shared_data["posts"].append(post_data)
+                        save_shared_data(shared_data)
+                        st.success("🎉 发布成功！树洞接住了你的小情绪～")
+                        st.balloons()
+                        # 清空临时数据
+                        st.session_state.tree_hole_temp = {
+                            "content": "", "emotion_tag": "焦虑", "nickname": "", "images": []
+                        }
+                        st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # 右侧：展示区（基于系统用户标识校验删除权限）
+        with col2:
+            st.markdown('<h4 style="color:#5a4b3c; margin-bottom:4px; font-size:15px;">🌟 树洞回音</h4>', unsafe_allow_html=True)
+            st.markdown('<p class="warm-text">看看工大伙伴们的暖心分享～</p>', unsafe_allow_html=True)
+            
+            # 情绪筛选
+            filter_emotion = st.selectbox("筛选情绪", ["全部"] + ["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"], label_visibility="collapsed")
+            
+            # 加载并筛选帖子
+            posts = shared_data["posts"][::-1]  # 倒序展示（最新的在前）
+            if filter_emotion != "全部":
+                posts = [p for p in posts if p["emotion"] == filter_emotion]
+            
+            # 空数据提示
+            if len(posts) == 0:
+                st.markdown('<div class="empty-tip">', unsafe_allow_html=True)
+                st.markdown("💡 还没有树洞哦～")
+                st.markdown("发布第一条心情，开启治愈之旅吧✨")
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                for post_idx, post in enumerate(posts):
+                    st.markdown('<div class="content-card">', unsafe_allow_html=True)
+                    
+                    # 帖子头部：昵称 + 时间 + 删除按钮
+                    post_head1, post_head2, post_head3 = st.columns([3, 1, 1])
+                    with post_head1:
+                        st.markdown(f'<span style="color:#5a4b3c; font-weight:500;">{post["nickname"]}</span> '
+                                    f'<span style="color:#948675; font-size:11px; background:#f0e9df; padding:2px 5px; border-radius:3px;">📌 {post["emotion"]}</span>',
+                                    unsafe_allow_html=True)
+                    with post_head2:
+                        st.markdown(f'<span style="color:#a89988; font-size:10px; text-align:right; display:block;">{post["create_time"]}</span>',
+                                    unsafe_allow_html=True)
+                    # 帖子删除权限：管理员可删所有，普通用户仅删自己发布的
+                    with post_head3:
+                        can_delete_post = False
+                        if st.session_state.is_admin:
+                            can_delete_post = True
+                        else:
+                            # 匹配发布者ID与当前用户ID
+                            can_delete_post = post.get("publisher_id") == st.session_state.user_unique_id
+                        
+                        if can_delete_post:
+                            st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
+                            if st.button("🗑️ 删除", key=f"del_post_{post['id']}", use_container_width=True):
+                                # 重新加载最新数据，避免索引错位
+                                shared_data = load_shared_data()
+                                original_idx = None
+                                for i, p in enumerate(shared_data["posts"]):
+                                    if p["id"] == post["id"]:
+                                        original_idx = i
+                                        break
+                                if original_idx is not None:
+                                    del shared_data["posts"][original_idx]
+                                    save_shared_data(shared_data)
+                                    st.success("✅ 已删除该帖子")
+                                    st.rerun()
+                            st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    # 帖子内容
+                    if post["content"]:
+                        st.markdown(f'<p class="warm-text" style="margin:6px 0;">{post["content"]}</p>', unsafe_allow_html=True)
+                    
+                    # 帖子图片
+                    if post["images"] and len(post["images"]) > 0:
+                        st.markdown('<div class="post-images-grid">', unsafe_allow_html=True)
+                        for img_b64 in post["images"]:
+                            if img_b64:
+                                img_html = f'<img src="data:image/png;base64,{img_b64}" class="post-image" alt="树洞图片">'
+                                st.markdown(img_html, unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    # 暖心回应
+                    st.markdown(f'<div style="background:#f9f5f0; padding:6px; border-radius:8px; margin:6px 0;">'
+                                f'<span style="color:#7d6b57; font-size:11px;">💬 工大暖心回应：</span>'
+                                f'<span class="warm-text"> {post["response"]}</span>'
+                                f'</div>', unsafe_allow_html=True)
+                    
+                    # 点赞 + 评论区
+                    interact1, interact2 = st.columns([1,4])
+                    with interact1:
+                        # 点赞功能
+                        if st.button(f"❤️ {post['like_count']}", key=f"th_like_{post['id']}", use_container_width=True):
+                            shared_data = load_shared_data()
+                            for p in shared_data["posts"]:
+                                if p["id"] == post["id"]:
+                                    p["like_count"] += 1
+                                    break
+                            save_shared_data(shared_data)
+                            st.rerun()
+                    with interact2:
+                        # 评论输入
+                        comment_col1, comment_col2 = st.columns([4,1])
+                        with comment_col1:
+                            comment = st.text_input("留下你的鼓励～", placeholder="如：加油！一切都会好起来的✨", key=f"th_comment_{post['id']}", label_visibility="collapsed")
+                        with comment_col2:
+                            if st.button("发送", key=f"th_send_{post['id']}", use_container_width=True):
+                                if comment.strip():
+                                    has_sensitive, word = check_sensitive_words(comment)
+                                    if has_sensitive:
+                                        st.error(f"❌ 评论包含违规词「{word}」，请修改后发送～")
+                                    else:
+                                        shared_data = load_shared_data()
+                                        for p in shared_data["posts"]:
+                                            if p["id"] == post["id"]:
+                                                p["comments"].append({
+                                                    "nickname": "工大暖心小伙伴",
+                                                    "content": comment.strip(),
+                                                    "time": datetime.datetime.now().strftime("%H:%M:%S"),
+                                                    # 绑定评论者用户标识
+                                                    "commenter_id": st.session_state.user_unique_id
+                                                })
+                                                break
+                                        save_shared_data(shared_data)
+                                        st.success("💖 你的鼓励已送达～")
+                                        st.rerun()
+                    
+                    # 评论列表
+                    if post["comments"] and len(post["comments"]) > 0:
+                        st.markdown('<p class="warm-text" style="font-size:11px; margin-top:6px; font-weight:500;">📝 暖心评论：</p>', unsafe_allow_html=True)
+                        for c_idx, c in enumerate(post["comments"]):
+                            cmt_col1, cmt_col2 = st.columns([5, 1])
+                            with cmt_col1:
+                                st.markdown(f'<div style="margin-left:6px; font-size:11px; padding:3px 0;">'
+                                            f'<span style="color:#7d6b57; font-weight:500;">{c["nickname"]}</span> '
+                                            f'<span style="color:#a89988;">({c["time"]})</span>：'
+                                            f'<span class="warm-text">{c["content"]}</span>'
+                                            f'</div>', unsafe_allow_html=True)
+                            with cmt_col2:
+                                # 评论删除权限：管理员可删所有，普通用户仅删自己发布的
+                                can_delete_cmt = False
+                                if st.session_state.is_admin:
+                                    can_delete_cmt = True
+                                else:
+                                    can_delete_cmt = c.get("commenter_id") == st.session_state.user_unique_id
+                                
+                                if can_delete_cmt:
+                                    st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
+                                    if st.button("🗑️", key=f"del_cmt_{post['id']}_{c_idx}", use_container_width=True):
+                                        shared_data = load_shared_data()
+                                        for p in shared_data["posts"]:
+                                            if p["id"] == post["id"]:
+                                                del p["comments"][c_idx]
+                                                break
+                                        save_shared_data(shared_data)
+                                        st.success("✅ 已删除该评论")
+                                        st.rerun()
+                                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)  # 关闭content-card
+        st.markdown('</div>', unsafe_allow_html=True)  # 关闭tree-hole-container
