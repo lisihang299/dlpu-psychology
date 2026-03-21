@@ -276,6 +276,7 @@ DLPU_TEACHERS = [
         "services": ["个体咨询", "团体心理辅导", "心理测评", "心理健康科普培训"],
         "honor": "国家二级心理咨询师，国家心理行为训练师，沙盘游戏指导师，绘画心理分析师",
         "avatar_path": "./ai心理/static/images/teacher4.jpg.png"
+    }
 ]
 
 # 2.2 学校咨询服务信息
