@@ -1887,8 +1887,8 @@ if "DLPU_CONSULT_SERVICE" not in st.session_state:
     st.session_state.DLPU_CONSULT_SERVICE = {
         "service_object": "大连工业大学全体在校本科生、研究生、教职工",
         "service_type": ["个体心理咨询", "团体心理咨询", "心理危机干预", "心理健康教育"],
-        "reservation_method": ["线下预约：大学生活动中心302室", "电话预约：0411-86318792"],
-        "consult_address": "大连工业大学大学生活动中心302室",
+        "reservation_method": ["线下预约：校医院3露", "电话预约：0411-86318792"],
+        "consult_address": "大连工业大学校医院3楼",
         "consult_time": "周一至周五：8:30-11:30，13:30-17:00",
         "service_principle": ["保密原则", "自愿原则", "中立原则", "尊重原则"],
         "notice": "心理咨询是专业的心理支持服务，如有需要请及时预约。保护隐私，专业守护！"
