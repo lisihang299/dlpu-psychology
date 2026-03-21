@@ -1810,11 +1810,41 @@ with tab5:
         st.markdown("---")
 
 # 标签页6：学校咨询服务（包含校园心理资源自定义功能）
+import streamlit as st
+import json
+import os
+import sys
+
+# ===================== 新增：持久化存储配置 =====================
+# 定义数据存储文件路径（确保路径兼容 Streamlit Cloud）
+DATA_FILE = "custom_psychology_resources.json"
+
+# 初始化自定义资源（从JSON文件加载，而不是仅存在session中）
+def init_custom_resources():
+    # 如果文件不存在，创建空文件
+    if not os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({}, f, ensure_ascii=False)
+    
+    # 从文件加载数据到session_state（兼容原有逻辑）
+    if "custom_psychology_resources" not in st.session_state:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            st.session_state.custom_psychology_resources = json.load(f)
+
+# 保存自定义资源到JSON文件
+def save_custom_resources():
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(st.session_state.custom_psychology_resources, f, ensure_ascii=False, indent=2)
+
+# ===================== 原有功能代码（已修改） =====================
 with tab6:
     # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
+    
+    # 初始化持久化资源（关键：页面加载时先执行）
+    init_custom_resources()
     
     # 显示当前用户权限状态
     if is_admin():
@@ -1904,7 +1934,11 @@ with tab6:
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                st.success("✅ 资源添加成功！")
+                
+                # 关键修改：添加后立即保存到JSON文件
+                save_custom_resources()
+                
+                st.success("✅ 资源添加成功！（已永久保存）")
                 st.rerun()
         
         st.markdown("---")
@@ -1922,6 +1956,10 @@ with tab6:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
                         # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
+                        
+                        # 关键修改：删除后立即保存到JSON文件
+                        save_custom_resources()
+                        
                         st.success("✅ 资源已删除！")
                         st.rerun()
         else:
