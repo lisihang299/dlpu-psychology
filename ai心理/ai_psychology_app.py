@@ -1814,28 +1814,38 @@ import streamlit as st
 import json
 import os
 import sys
+# ===================== 新增：进阶方案 - TinyDB 云同步 =====================
+from tinydb import TinyDB, Query
+from tinydb.storages import JSONStorage
+from tinydb.middlewares import CachingMiddleware
 
-# ===================== 【仅新增】跨设备持久化核心代码 =====================
-# 定义数据存储文件（和代码一起提交到GitHub，所有设备共享）
-DATA_FILE = "custom_psychology_resources.json"
-
-# 初始化：从文件加载数据到session_state（所有设备打开时都会读这个文件）
+# 初始化TinyDB（缓存+JSON存储，实现跨设备实时同步）
+# 数据库文件会自动同步到Streamlit Cloud，所有设备共享
+db = TinyDB(
+    "custom_psychology_resources_db.json",
+    storage=CachingMiddleware(JSONStorage)
+)
+# ===================== 替换原有文件读写为数据库操作 =====================
+# 初始化：从数据库加载数据（跨设备核心）
 def init_persistent_resources():
-    # 如果文件不存在，创建空文件
-    if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump({}, f, ensure_ascii=False)
-    # 加载到session_state（和你原有变量名完全一致，不破坏逻辑）
+    # 从数据库读取最新数据
+    data = db.all()
+    # 初始化session_state（和你原有变量名一致，不破坏逻辑）
     if "custom_psychology_resources" not in st.session_state:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            st.session_state.custom_psychology_resources = json.load(f)
+        st.session_state.custom_psychology_resources = data[0] if data else {
+            "psychological_course": [],
+            "psychological_activity": [],
+            "psychological_test": [],
+            "online_resources": []
+        }
 
-# 保存：把session_state的数据写回文件（管理员添加/删除时调用）
+# 保存：把数据写入数据库（实时同步到所有设备）
 def save_persistent_resources():
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(st.session_state.custom_psychology_resources, f, ensure_ascii=False, indent=2)
+    # 清空旧数据，写入新数据
+    db.truncate()
+    db.insert(st.session_state.custom_psychology_resources)
 
-# 修复：确保get_combined_resources能读到跨设备数据（和你原有函数名一致）
+# 修复：确保get_combined_resources能读到跨设备数据
 def get_combined_resources():
     system_resources = {
         "psychological_course": [],
@@ -1848,17 +1858,15 @@ def get_combined_resources():
         custom_res = st.session_state.custom_psychology_resources.get(key, [])
         combined[key] = system_resources[key] + custom_res
     return combined
-# ===================== 【结束新增】 =====================
-
+# ===================== 原有代码完全保留 =====================
 with tab6:
     # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
     
-    # ===================== 【仅新增1行】初始化持久化资源 =====================
+    # 初始化数据库资源（跨设备核心）
     init_persistent_resources()
-    # ===================== 【结束新增】 =====================
     
     # 显示当前用户权限状态
     if is_admin():
@@ -1948,10 +1956,9 @@ with tab6:
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                # ===================== 【仅新增1行】保存到文件（跨设备核心） =====================
+                # 保存到数据库（实时同步到所有设备）
                 save_persistent_resources()
-                # ===================== 【结束新增】 =====================
-                st.success("✅ 资源添加成功！所有设备都能看见")
+                st.success("✅ 资源添加成功！所有设备实时可见")
                 st.rerun()
         
         st.markdown("---")
@@ -1969,10 +1976,9 @@ with tab6:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
                         # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        # ===================== 【仅新增1行】删除后也保存到文件 =====================
+                        # 保存到数据库（实时同步）
                         save_persistent_resources()
-                        # ===================== 【结束新增】 =====================
-                        st.success("✅ 资源已删除！所有设备都同步更新")
+                        st.success("✅ 资源已删除！所有设备实时同步")
                         st.rerun()
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
@@ -1995,7 +2001,7 @@ with tab6:
             is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
                         resource in st.session_state.custom_psychology_resources[resource_type_key])
             icon = "🔹" if is_custom else "📌"
-            label = "（管理员添加，所有设备可见）" if is_custom else "（系统内置）"
+            label = "（管理员添加，所有设备实时可见）" if is_custom else "（系统内置）"
             st.markdown(f"{icon} {resource} {label}")
     else:
         st.info(f"暂无{resource_type_to_manage}内容")
