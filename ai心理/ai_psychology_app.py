@@ -2845,11 +2845,11 @@ with tab7:
     with tool5:
         st.header("🔍 多模态情绪识别（面部/语音）")
         multimodal_emotion_recognition()
-    
-with tool6:
+    with tool6:
         import streamlit as st
         import datetime
         import random
+        import string
         from PIL import Image
         import io
         import base64
@@ -2868,6 +2868,19 @@ with tool6:
         DATA_FILE = "tree_hole_data.json"
         # 全局锁：确保同一时间只有一个线程读写JSON文件
         file_lock = threading.Lock()
+
+        # ==================== 新增：低版本兼容的用户唯一标识生成函数 ====================
+        def generate_user_identifier():
+            """
+            生成唯一的用户标识（兼容低版本Streamlit，替代st.session_id）
+            组合：时间戳 + 随机字符串，确保每个游客的标识唯一
+            """
+            # 时间戳（精确到微秒）
+            timestamp = str(datetime.datetime.now().timestamp()).replace(".", "")
+            # 随机6位字母数字组合
+            random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+            # 拼接成唯一标识
+            return f"user_{timestamp}_{random_str}"
 
         # ==================== 核心：每次都重新加载共享数据（关键修复） ====================
         def load_shared_data():
@@ -2906,9 +2919,9 @@ with tool6:
             st.session_state.tree_hole_sensitive = []
         if "is_admin" not in st.session_state:
             st.session_state.is_admin = False  # 默认非管理员，避免误操作
-        # 新增：初始化用户唯一标识（基于会话ID，确保每个游客有唯一标识）
+        # 核心修复：低版本兼容的用户唯一标识（替换st.session_id）
         if "user_identifier" not in st.session_state:
-            st.session_state.user_identifier = st.session_id  # 用streamlit内置会话ID作为游客唯一标识
+            st.session_state.user_identifier = generate_user_identifier()  # 使用自定义函数生成
 
         # ==================== 核心CSS（不变） ====================
         st.markdown("""
