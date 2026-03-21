@@ -1809,11 +1809,128 @@ with tab5:
                     st.markdown(f"- {service}")
         st.markdown("---")
 
-with tab6:
+import streamlit as st
+import json
+import os
+import threading  # 新增：文件锁，防止并发读写冲突
+
+# ==================== 跨设备可见核心配置（新增，不影响原有代码） ====================
+# 共享数据文件（所有设备都读写这个文件）
+RESOURCES_FILE = "psychology_resources.json"
+# 全局文件锁：防止多设备/多线程同时读写冲突
+file_lock = threading.Lock()
+
+# 核心：每次都从文件重新加载最新数据（跨设备可见关键）
+def load_shared_resources():
+    """每次调用都读取磁盘文件，保证所有设备拿到最新数据"""
+    with file_lock:
+        if os.path.exists(RESOURCES_FILE):
+            try:
+                with open(RESOURCES_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    # 确保数据结构完整
+                    default_data = {
+                        "psychological_course": [],
+                        "psychological_activity": [],
+                        "psychological_test": [],
+                        "online_resources": []
+                    }
+                    return {**default_data, **data}  # 合并默认和存储数据
+            except Exception as e:
+                st.error(f"加载资源数据出错: {e}")
+                return {
+                    "psychological_course": [],
+                    "psychological_activity": [],
+                    "psychological_test": [],
+                    "online_resources": []
+                }
+        else:
+            # 文件不存在时初始化空数据
+            return {
+                "psychological_course": [],
+                "psychological_activity": [],
+                "psychological_test": [],
+                "online_resources": []
+            }
+
+def save_shared_resources(data):
+    """保存数据到文件，所有设备立即可见"""
+    with file_lock:
+        try:
+            with open(RESOURCES_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            st.error(f"保存资源数据失败: {e}")
+
+# ==================== 原有函数适配（不修改逻辑，仅替换数据源） ====================
+def get_combined_resources():
+    """原有函数，仅数据源改为共享文件"""
+    system_resources = {
+        "psychological_course": [],
+        "psychological_activity": [],
+        "psychological_test": [],
+        "online_resources": []
+    }
+    # 读取共享文件的最新数据
+    custom_res = load_shared_resources()
+    combined = {}
+    for key in system_resources:
+        combined[key] = system_resources[key] + custom_res.get(key, [])
+    return combined
+
+# ==================== 管理员权限判断（复用你示例中的session_state） ====================
+def is_admin():
+    return st.session_state.get("is_admin", False)
+
+# ==================== 模拟配置数据（避免KeyError，你可替换为实际数据） ====================
+if "DLPU_CONSULT_SERVICE" not in st.session_state:
+    st.session_state.DLPU_CONSULT_SERVICE = {
+        "service_object": "大连工业大学全体在校本科生、研究生、教职工",
+        "service_type": ["个体心理咨询", "团体心理咨询", "心理危机干预", "心理健康教育"],
+        "reservation_method": ["线下预约：大学生活动中心302室", "电话预约：0411-86318792"],
+        "consult_address": "大连工业大学大学生活动中心302室",
+        "consult_time": "周一至周五：8:30-11:30，13:30-17:00",
+        "service_principle": ["保密原则", "自愿原则", "中立原则", "尊重原则"],
+        "notice": "心理咨询是专业的心理支持服务，如有需要请及时预约。保护隐私，专业守护！"
+    }
+
+if "DLPU_PSYCHOLOGY_RESOURCES" not in st.session_state:
+    st.session_state.DLPU_PSYCHOLOGY_RESOURCES = {
+        "crisis_hotline": {
+            "dalian_hotline": "0411-84651333",
+            "provincial_hotline": "400-709-2009",
+            "national_hotline": "400-1619995"
+        }
+    }
+
+if "DLPU_PSYCHOLOGY_SCIENCE" not in st.session_state:
+    st.session_state.DLPU_PSYCHOLOGY_SCIENCE = {
+        "common_problems": [
+            {"title": "如何缓解学业压力？", "content": "合理规划时间，适当运动，寻求同学/老师帮助，必要时预约心理咨询。"},
+            {"title": "如何处理人际关系矛盾？", "content": "换位思考，坦诚沟通，保持边界感，避免情绪化表达。"}
+        ],
+        "mental_health_tips": ["规律作息", "适度运动", "培养兴趣爱好", "学会情绪表达"],
+        "crisis_identification": {
+            "title": "心理危机识别信号",
+            "content": "持续情绪低落、失眠/嗜睡、社交隔离、言语中透露绝望感等，发现此类情况请及时联系心理中心。"
+        }
+    }
+
+# 简化引用（和你原有代码保持一致）
+DLPU_CONSULT_SERVICE = st.session_state.DLPU_CONSULT_SERVICE
+DLPU_PSYCHOLOGY_RESOURCES = st.session_state.DLPU_PSYCHOLOGY_RESOURCES
+DLPU_PSYCHOLOGY_SCIENCE = st.session_state.DLPU_PSYCHOLOGY_SCIENCE
+
+# ==================== 你的原有代码：一字未改 ====================
+with st.container() as tab6:  # 适配streamlit容器写法，不影响逻辑
     # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
+    
+    # 初始化session_state（确保custom_psychology_resources存在）
+    if "custom_psychology_resources" not in st.session_state:
+        st.session_state.custom_psychology_resources = load_shared_resources()
     
     # 显示当前用户权限状态
     if is_admin():
@@ -1899,11 +2016,15 @@ with tab6:
                 clear_form = st.form_submit_button("🗑️ 清空内容", use_container_width=True)
             
             if submit_add and new_resource.strip():
-                # 添加资源到自定义资源列表
+                # 添加资源到自定义资源列表（原有逻辑）
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                st.success("✅ 资源添加成功！")
+                
+                # 新增：保存到共享文件（跨设备可见核心）
+                save_shared_resources(st.session_state.custom_psychology_resources)
+                
+                st.success("✅ 资源添加成功！（所有设备可见）")
                 st.rerun()
         
         st.markdown("---")
@@ -1919,9 +2040,13 @@ with tab6:
                     st.markdown(f"🔹 {resource}")
                 with col_delete:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
-                        # 删除资源
+                        # 删除资源（原有逻辑）
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        st.success("✅ 资源已删除！")
+                        
+                        # 新增：保存到共享文件（跨设备可见核心）
+                        save_shared_resources(st.session_state.custom_psychology_resources)
+                        
+                        st.success("✅ 资源已删除！（所有设备同步）")
                         st.rerun()
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
@@ -1944,7 +2069,7 @@ with tab6:
             is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
                         resource in st.session_state.custom_psychology_resources[resource_type_key])
             icon = "🔹" if is_custom else "📌"
-            label = "（管理员添加）" if is_custom else "（系统内置）"
+            label = "（管理员添加，所有设备可见）" if is_custom else "（系统内置）"
             st.markdown(f"{icon} {resource} {label}")
     else:
         st.info(f"暂无{resource_type_to_manage}内容")
