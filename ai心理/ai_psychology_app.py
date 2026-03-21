@@ -2845,7 +2845,7 @@ with tab7:
     with tool5:
         st.header("🔍 多模态情绪识别（面部/语音）")
         multimodal_emotion_recognition()
-   with tool6:
+    with tool6:
         import streamlit as st
         import datetime
         import random
