@@ -1809,11 +1809,56 @@ with tab5:
                     st.markdown(f"- {service}")
         st.markdown("---")
 
+# 标签页6：学校咨询服务（包含严格的权限控制）
+import streamlit as st
+import json
+import os
+import sys
+
+# ===================== 【仅新增】跨设备持久化核心代码 =====================
+# 定义数据存储文件（和代码一起提交到GitHub，所有设备共享）
+DATA_FILE = "custom_psychology_resources.json"
+
+# 初始化：从文件加载数据到session_state（所有设备打开时都会读这个文件）
+def init_persistent_resources():
+    # 如果文件不存在，创建空文件
+    if not os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({}, f, ensure_ascii=False)
+    # 加载到session_state（和你原有变量名完全一致，不破坏逻辑）
+    if "custom_psychology_resources" not in st.session_state:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            st.session_state.custom_psychology_resources = json.load(f)
+
+# 保存：把session_state的数据写回文件（管理员添加/删除时调用）
+def save_persistent_resources():
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(st.session_state.custom_psychology_resources, f, ensure_ascii=False, indent=2)
+
+# 修复：确保get_combined_resources能读到跨设备数据（和你原有函数名一致）
+def get_combined_resources():
+    system_resources = {
+        "psychological_course": [],
+        "psychological_activity": [],
+        "psychological_test": [],
+        "online_resources": []
+    }
+    combined = {}
+    for key in system_resources:
+        custom_res = st.session_state.custom_psychology_resources.get(key, [])
+        combined[key] = system_resources[key] + custom_res
+    return combined
+# ===================== 【结束新增】 =====================
+
 with tab6:
     # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
+    
+    # ===================== 【仅新增1行】初始化持久化资源 =====================
+    init_persistent_resources()
+    # ===================== 【结束新增】 =====================
     
     # 显示当前用户权限状态
     if is_admin():
@@ -1903,7 +1948,10 @@ with tab6:
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                st.success("✅ 资源添加成功！")
+                # ===================== 【仅新增1行】保存到文件（跨设备核心） =====================
+                save_persistent_resources()
+                # ===================== 【结束新增】 =====================
+                st.success("✅ 资源添加成功！所有设备都能看见")
                 st.rerun()
         
         st.markdown("---")
@@ -1921,7 +1969,10 @@ with tab6:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
                         # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        st.success("✅ 资源已删除！")
+                        # ===================== 【仅新增1行】删除后也保存到文件 =====================
+                        save_persistent_resources()
+                        # ===================== 【结束新增】 =====================
+                        st.success("✅ 资源已删除！所有设备都同步更新")
                         st.rerun()
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
@@ -1944,7 +1995,7 @@ with tab6:
             is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
                         resource in st.session_state.custom_psychology_resources[resource_type_key])
             icon = "🔹" if is_custom else "📌"
-            label = "（管理员添加）" if is_custom else "（系统内置）"
+            label = "（管理员添加，所有设备可见）" if is_custom else "（系统内置）"
             st.markdown(f"{icon} {resource} {label}")
     else:
         st.info(f"暂无{resource_type_to_manage}内容")
