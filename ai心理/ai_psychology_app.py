@@ -1882,28 +1882,32 @@ def get_combined_resources():
 def is_admin():
     return st.session_state.get("is_admin", False)
 
-# ==================== 模拟配置数据（避免KeyError，你可替换为实际数据） ====================
+# ==================== 模拟配置数据（修复括号不匹配问题） ====================
 if "DLPU_CONSULT_SERVICE" not in st.session_state:
     st.session_state.DLPU_CONSULT_SERVICE = {
         "service_object": "大连工业大学全体在校本科生、研究生、教职工",
         "service_type": [
-        "个体咨询：一对一的专业心理咨询服务，每次50分钟左右，涵盖情绪调节、压力管理、人际交往、学业困难、恋爱心理、生涯规划等多个领域",
-        "团体辅导：针对特定主题的小组心理辅导（如人际关系提升、压力管理、情绪调节、新生适应、毕业生就业心理等），每组8-12人，周期4-8次",
-        "心理测评：提供专业的心理量表测评（包括焦虑、抑郁、压力、人格、人际关系、生涯规划等），帮助学生了解自身心理状态",
-        "危机干预：针对自杀倾向、自伤行为、严重情绪崩溃等心理危机事件的紧急干预与支持，24小时响应",
-        "心理健康讲座：面向全校开展的心理健康科普讲座（如情绪管理、压力应对、恋爱心理、生涯规划等）"],
+            "个体咨询：一对一的专业心理咨询服务，每次50分钟左右，涵盖情绪调节、压力管理、人际交往、学业困难、恋爱心理、生涯规划等多个领域",
+            "团体辅导：针对特定主题的小组心理辅导（如人际关系提升、压力管理、情绪调节、新生适应、毕业生就业心理等），每组8-12人，周期4-8次",
+            "心理测评：提供专业的心理量表测评（包括焦虑、抑郁、压力、人格、人际关系、生涯规划等），帮助学生了解自身心理状态",
+            "危机干预：针对自杀倾向、自伤行为、严重情绪崩溃等心理危机事件的紧急干预与支持，24小时响应",
+            "心理健康讲座：面向全校开展的心理健康科普讲座（如情绪管理、压力应对、恋爱心理、生涯规划等）"
+        ],
         "reservation_method": [
-        "线上预约：通过大连工业大学云工大心理咨询预约",
-        "线下预约：门诊部303、304房间登记预约",
-        "电话预约：0411-8618792（工作日8:30-11:30，13:30-17:00）",
-        "紧急情况：可直接前往心理健康教育中心，或第一时间联系辅导员/班主任、学院副书记，也可拨打学校24小时值班电话"],
+            "线上预约：通过大连工业大学云工大心理咨询预约",
+            "线下预约：门诊部303、304房间登记预约",
+            "电话预约：0411-8618792（工作日8:30-11:30，13:30-17:00）",
+            "紧急情况：可直接前往心理健康教育中心，或第一时间联系辅导员/班主任、学院副书记，也可拨打学校24小时值班电话"
+        ],
         "consult_address": "门诊部303、304房间",
         "consult_time": "周一至周五：8:30-11:30，13:30-17:00（寒暑假及法定节假日另行通知，紧急情况除外）",
-        "service_principle": ["保密原则：咨询内容严格保密，未经来访者同意，不得向任何第三方泄露（法律规定的特殊情况除外，如涉及自杀、自伤、伤害他人等）",
-        "自愿原则：来访者自愿参与咨询，可根据自身情况随时终止咨询",
-        "中立原则：咨询师保持客观中立的态度，不评判来访者的想法、行为和价值观",
-        "专业原则：严格遵循心理咨询专业伦理规范，提供科学、专业的心理服务",
-        "免费原则：学校心理健康教育中心所有咨询服务、测评、讲座、工作坊等均为免费提供"],
+        "service_principle": [
+            "保密原则：咨询内容严格保密，未经来访者同意，不得向任何第三方泄露（法律规定的特殊情况除外，如涉及自杀、自伤、伤害他人等）",
+            "自愿原则：来访者自愿参与咨询，可根据自身情况随时终止咨询",
+            "中立原则：咨询师保持客观中立的态度，不评判来访者的想法、行为和价值观",
+            "专业原则：严格遵循心理咨询专业伦理规范，提供科学、专业的心理服务",
+            "免费原则：学校心理健康教育中心所有咨询服务、测评、讲座、工作坊等均为免费提供"
+        ],
         "notice": "心理咨询是专业的心理支持服务，如有需要请及时预约。保护隐私，专业守护！"
     }
 
@@ -1918,32 +1922,38 @@ if "DLPU_PSYCHOLOGY_RESOURCES" not in st.session_state:
 
 if "DLPU_PSYCHOLOGY_SCIENCE" not in st.session_state:
     st.session_state.DLPU_PSYCHOLOGY_SCIENCE = {
-           "common_problems": [
-        {
-            "title": "大学生常见心理问题及应对",
-            "content": "大学生常见的心理问题包括：适应障碍（新生入学适应、环境适应）、学业压力、人际交往困扰、情绪调节问题（焦虑、抑郁、愤怒）、恋爱心理问题、生涯规划迷茫、家庭关系冲突等。应对建议：1. 主动了解心理健康知识，提升自我调适能力；2. 积极参与校园活动，拓展人际交往；3. 遇到问题及时向辅导员、同学、家人倾诉；4. 必要时寻求专业心理咨询帮助。"
-        },
-        {
-            "title": "焦虑情绪的识别与调节",
-            "content": "焦虑情绪的常见表现：心理上（紧张、担忧、烦躁、注意力不集中）、生理上（心跳加快、呼吸急促、头晕、失眠、食欲不振）、行为上（坐立不安、拖延、回避）。调节方法：1. 呼吸放松法（4-7-8呼吸法、腹式呼吸）；2. 正念冥想，专注当下；3. 认知重构，调整负面思维；4. 适当运动，释放压力；5. 合理规划时间，避免过度压力。"
-        },
-        {
-            "title": "抑郁情绪的识别与应对",
-            "content": "抑郁情绪的常见表现：持续情绪低落、兴趣减退、精力下降、自我评价降低、睡眠障碍（失眠或嗜睡）、食欲改变、注意力不集中、有自杀念头等。应对建议：1. 及时寻求专业帮助（心理咨询、心理治疗、药物治疗）；2. 保持规律作息和饮食；3. 适当参与户外活动和社交；4. 做一些能带来成就感的小事；5. 避免独处过久，多与他人交流。"
-        },
-        {
-            "title": "人际交往困扰的解决方法",
-            "content": "大学生人际交往困扰主要表现为：社交恐惧、人际冲突、孤独感、缺乏沟通技巧等。解决方法：1. 提升沟通技巧，学会倾听和表达；2. 尊重他人，换位思考；3. 主动参与社交活动，逐步克服社交恐惧；4. 遇到人际冲突时，冷静沟通，避免指责；5. 接纳自己的社交风格，不必强求完美。"
+        "common_problems": [
+            {
+                "title": "大学生常见心理问题及应对",
+                "content": "大学生常见的心理问题包括：适应障碍（新生入学适应、环境适应）、学业压力、人际交往困扰、情绪调节问题（焦虑、抑郁、愤怒）、恋爱心理问题、生涯规划迷茫、家庭关系冲突等。应对建议：1. 主动了解心理健康知识，提升自我调适能力；2. 积极参与校园活动，拓展人际交往；3. 遇到问题及时向辅导员、同学、家人倾诉；4. 必要时寻求专业心理咨询帮助。"
+            },
+            {
+                "title": "焦虑情绪的识别与调节",
+                "content": "焦虑情绪的常见表现：心理上（紧张、担忧、烦躁、注意力不集中）、生理上（心跳加快、呼吸急促、头晕、失眠、食欲不振）、行为上（坐立不安、拖延、回避）。调节方法：1. 呼吸放松法（4-7-8呼吸法、腹式呼吸）；2. 正念冥想，专注当下；3. 认知重构，调整负面思维；4. 适当运动，释放压力；5. 合理规划时间，避免过度压力。"
+            },
+            {
+                "title": "抑郁情绪的识别与应对",
+                "content": "抑郁情绪的常见表现：持续情绪低落、兴趣减退、精力下降、自我评价降低、睡眠障碍（失眠或嗜睡）、食欲改变、注意力不集中、有自杀念头等。应对建议：1. 及时寻求专业帮助（心理咨询、心理治疗、药物治疗）；2. 保持规律作息和饮食；3. 适当参与户外活动和社交；4. 做一些能带来成就感的小事；5. 避免独处过久，多与他人交流。"
+            },
+            {
+                "title": "人际交往困扰的解决方法",
+                "content": "大学生人际交往困扰主要表现为：社交恐惧、人际冲突、孤独感、缺乏沟通技巧等。解决方法：1. 提升沟通技巧，学会倾听和表达；2. 尊重他人，换位思考；3. 主动参与社交活动，逐步克服社交恐惧；4. 遇到人际冲突时，冷静沟通，避免指责；5. 接纳自己的社交风格，不必强求完美。"
+            }
+        ],  # 这里补上了缺失的 ] 和 ，
+        "mental_health_tips": [
+            "保持规律作息：充足的睡眠是心理健康的基础，建议每天睡眠7-8小时，避免熬夜。",
+            "合理饮食：均衡营养，多吃蔬菜水果、全谷物、优质蛋白质，少吃辛辣刺激、高糖高脂食物。",
+            "坚持运动：每周进行3次以上有氧运动（跑步、游泳、瑜伽、打球等），每次30分钟以上，促进多巴胺分泌，改善情绪。",
+            "学会情绪表达：不要压抑情绪，可通过倾诉、写日记、绘画、听音乐等方式释放情绪。",
+            "培养兴趣爱好：参与自己喜欢的活动（如读书、绘画、音乐、摄影、志愿服务等），丰富课余生活，提升幸福感。",
+            "建立支持系统：与家人、朋友、同学保持良好沟通，遇到问题时能获得情感支持。",
+            "避免过度使用电子产品：减少手机、电脑使用时间，多进行面对面交流和户外活动。",
+            "学会自我接纳：接受自己的不完美，关注自身优点，避免过度自我批评。"
+        ],
+        "crisis_identification": {
+            "title": "心理危机的识别与应对",
+            "content": "心理危机的常见信号：1. 言语上：经常说'活着没意思''想自杀''不想活了'等消极言论；2. 行为上：突然与他人疏远、整理物品、赠送礼物、自伤行为、情绪剧烈波动；3. 情绪上：持续抑郁、焦虑、愤怒、麻木不仁；4. 生活上：突然改变作息、饮食，放弃兴趣爱好，学业/工作表现急剧下降。应对方法：1. 保持冷静，主动关心，倾听其感受，不要评判；2. 不要离开其身边，确保其安全；3. 及时联系辅导员、学校心理健康教育中心、家人或拨打危机干预热线；4. 不要让其单独待在封闭空间，移除可能的危险物品。"
         }
-               "mental_health_tips": [
-        "保持规律作息：充足的睡眠是心理健康的基础，建议每天睡眠7-8小时，避免熬夜。",
-        "合理饮食：均衡营养，多吃蔬菜水果、全谷物、优质蛋白质，少吃辛辣刺激、高糖高脂食物。",
-        "坚持运动：每周进行3次以上有氧运动（跑步、游泳、瑜伽、打球等），每次30分钟以上，促进多巴胺分泌，改善情绪。",
-        "学会情绪表达：不要压抑情绪，可通过倾诉、写日记、绘画、听音乐等方式释放情绪。",
-        "培养兴趣爱好：参与自己喜欢的活动（如读书、绘画、音乐、摄影、志愿服务等），丰富课余生活，提升幸福感。",
-        "建立支持系统：与家人、朋友、同学保持良好沟通，遇到问题时能获得情感支持。",
-        "避免过度使用电子产品：减少手机、电脑使用时间，多进行面对面交流和户外活动。",
-        "学会自我接纳：接受自己的不完美，关注自身优点，避免过度自我批评。"
     }
 
 # 简化引用（和你原有代码保持一致）
@@ -1951,12 +1961,16 @@ DLPU_CONSULT_SERVICE = st.session_state.DLPU_CONSULT_SERVICE
 DLPU_PSYCHOLOGY_RESOURCES = st.session_state.DLPU_PSYCHOLOGY_RESOURCES
 DLPU_PSYCHOLOGY_SCIENCE = st.session_state.DLPU_PSYCHOLOGY_SCIENCE
 
-# ==================== 你的原有代码：仅新增3行跨设备逻辑，其余完全不变 ====================
-with tab6:
+# ==================== 你的原有代码：仅新增跨设备保存逻辑，删除重复粘贴 ====================
+with st.container() as tab6:  # 替换为你实际的 tab6 容器
     # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
+    
+    # 初始化自定义资源数据（跨设备核心）
+    if "custom_psychology_resources" not in st.session_state:
+        st.session_state.custom_psychology_resources = load_shared_resources()
     
     # 显示当前用户权限状态
     if is_admin():
@@ -2046,6 +2060,10 @@ with tab6:
                 if resource_type_key not in st.session_state.custom_psychology_resources:
                     st.session_state.custom_psychology_resources[resource_type_key] = []
                 st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
+                
+                # 新增：保存到共享文件（跨设备同步）
+                save_shared_resources(st.session_state.custom_psychology_resources)
+                
                 st.success("✅ 资源添加成功！")
                 st.rerun()
         
@@ -2064,6 +2082,10 @@ with tab6:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
                         # 删除资源
                         st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
+                        
+                        # 新增：保存到共享文件（跨设备同步）
+                        save_shared_resources(st.session_state.custom_psychology_resources)
+                        
                         st.success("✅ 资源已删除！")
                         st.rerun()
         else:
@@ -2122,61 +2144,6 @@ with tab6:
     with tab6_3:
         st.markdown(f"### {DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['title']}")
         st.markdown(DLPU_PSYCHOLOGY_SCIENCE['crisis_identification']['content'])
-                
-                # ========== 新增2：添加资源后保存到共享文件（跨设备同步） ==========
-                save_shared_resources(st.session_state.custom_psychology_resources)
-                
-                st.success("✅ 资源添加成功！")  # 原有提示语，无修改
-                st.rerun()
-        
-        st.markdown("---")
-        
-        # 显示自定义资源（管理员可以管理）（原有代码，仅新增删除保存逻辑）
-        st.markdown("#### 🔧 自定义资源管理")
-        if (resource_type_key in st.session_state.custom_psychology_resources and 
-            st.session_state.custom_psychology_resources[resource_type_key]):
-            
-            for idx, resource in enumerate(st.session_state.custom_psychology_resources[resource_type_key]):
-                col_content, col_delete = st.columns([5, 1])
-                with col_content:
-                    st.markdown(f"🔹 {resource}")
-                with col_delete:
-                    if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
-                        # 删除资源（原有代码，无修改）
-                        st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        
-                        # ========== 新增3：删除资源后保存到共享文件（跨设备同步） ==========
-                        save_shared_resources(st.session_state.custom_psychology_resources)
-                        
-                        st.success("✅ 资源已删除！")  # 原有提示语，无修改
-                        st.rerun()
-        else:
-            st.info(f"暂无自定义{resource_type_to_manage}，请添加")  # 原有提示语，无修改
-    else:
-        # 游客只能查看，完全隐藏编辑功能（原有代码，无修改）
-        st.markdown("#### 📋 资源查看")
-        st.info("💡 提示：您当前以游客身份访问，只能查看资源内容。如需管理权限，请使用管理员账号登录。")
-    
-    st.markdown("---")
-    
-    # 显示完整的资源列表（所有用户可见）（原有代码，无修改）
-    st.markdown(f"#### 📋 完整的{resource_type_to_manage}列表")
-    
-    combined_resources = get_combined_resources()
-    all_resources = combined_resources[resource_type_key]
-    
-    if all_resources:
-        for resource in all_resources:
-            # 标记自定义资源（原有代码，无修改）
-            is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
-                        resource in st.session_state.custom_psychology_resources[resource_type_key])
-            icon = "🔹" if is_custom else "📌"
-            label = "（管理员添加）" if is_custom else "（系统内置）"  # 原有提示语，无修改
-            st.markdown(f"{icon} {resource} {label}")
-    else:
-        st.info(f"暂无{resource_type_to_manage}内容")  # 原有提示语，无修改
-    
-    st.markdown("---")
 # -------------------------- 专业心理工具库（tab7）功能代码 --------------------------
 from streamlit.components.v1 import html
 import random
