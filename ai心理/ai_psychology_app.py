@@ -1973,7 +1973,7 @@ with st.sidebar:
         admin_pwd = st.text_input("管理员密码", type="password", value="")
         if st.button("登录", use_container_width=True):
             # 账号密码校验（可替换为真实逻辑）
-            if admin_user == "admin" and admin_pwd == "123456":
+            if admin_user == "admin" and admin_pwd == "admin123":
                 st.session_state.is_admin = True
                 st.success("登录成功！")
                 st.rerun()  # 强制刷新同步状态
