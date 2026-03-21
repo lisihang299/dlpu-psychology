@@ -2847,7 +2847,7 @@ with tab7:
         multimodal_emotion_recognition()
     
 with tool6:
-    import streamlit as st
+   import streamlit as st
     import datetime
     import random
     from PIL import Image
@@ -2855,8 +2855,8 @@ with tool6:
     import base64
     import json
     import os
-    import threading  # 新增：用于文件锁，防止并发读写冲突
-
+    import threading
+    
     # ==================== 全局配置 ====================
     st.set_page_config(
         page_title="工大情绪树洞",
@@ -2864,72 +2864,85 @@ with tool6:
         layout="wide",
         initial_sidebar_state="collapsed"
     )
-
-    # 修正：使用绝对路径避免文件读写路径问题（适配Streamlit Cloud）
-    DATA_FILE = os.path.join(os.path.dirname(__file__), "tree_hole_data.json") if "__file__" in locals() else "tree_hole_data.json"
+    
+    # 修正：兼容Streamlit Cloud的路径处理，增加更健壮的兜底
+    if 'STREAMLIT_SERVER_BASEURL_PATH' in os.environ:
+        # 云端环境
+        DATA_FILE = "/mount/src/dlpu-psychology/tree_hole_data.json"
+    else:
+        # 本地环境
+        DATA_FILE = os.path.join(os.path.dirname(__file__), "tree_hole_data.json") if "__file__" in locals() else "tree_hole_data.json"
+    
     # 全局锁：确保同一时间只有一个线程读写JSON文件
     file_lock = threading.Lock()
-
-    # ==================== 核心：每次都重新加载共享数据（关键修复） ====================
+    
+    # ==================== 核心：数据读写（增加异常捕获） ====================
     def load_shared_data():
-        """每次调用都从磁盘重新读取，保证数据最新"""
-        with file_lock:  # 加锁，防止多线程读写冲突
-            if os.path.exists(DATA_FILE):
-                try:
+        """每次调用都从磁盘重新读取，保证数据最新，增加完整异常处理"""
+        try:
+            with file_lock:
+                if os.path.exists(DATA_FILE):
                     with open(DATA_FILE, "r", encoding="utf-8") as f:
                         data = json.load(f)
                         # 确保数据结构完整
                         data.setdefault("posts", [])
                         data.setdefault("responses_used", [])
                         return data
-                except Exception as e:
-                    st.error(f"加载数据出错: {str(e)}")
+                else:
                     return {"posts": [], "responses_used": []}
-            else:
-                return {"posts": [], "responses_used": []}
-
+        except Exception as e:
+            st.error(f"加载数据出错: {str(e)}")
+            # 出错时返回空的有效结构，避免后续代码崩溃
+            return {"posts": [], "responses_used": []}
+    
     def save_shared_data(data):
-        """保存时加锁，确保写入完整"""
-        with file_lock:
-            try:
-                # 确保目录存在（适配云端部署）
+        """保存时加锁，确保写入完整，增加目录创建和异常处理"""
+        try:
+            with file_lock:
+                # 确保目录存在
                 os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
                 with open(DATA_FILE, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                st.error(f"保存数据失败: {str(e)}")
-
-    # ==================== 会话状态初始化（核心修复区） ====================
-    # 初始化临时发布数据
-    if "tree_hole_temp" not in st.session_state:
-        st.session_state.tree_hole_temp = {
-            "content": "", "emotion_tag": "焦虑", "nickname": "", "images": []
-        }
-    # 初始化敏感词列表
-    if "tree_hole_sensitive" not in st.session_state:
-        st.session_state.tree_hole_sensitive = []
-    # 初始化管理员状态
-    if "is_admin" not in st.session_state:
-        st.session_state.is_admin = False  # 修正：默认非管理员，避免误设为True
+        except Exception as e:
+            st.error(f"保存数据失败: {str(e)}")
     
-    # ========== 关键修复：用户唯一标识初始化（解决AttributeError） ==========
-    # 方案：分步获取，层层兜底，避免链式调用出错
-    if "user_identifier" not in st.session_state:
-        # 第一步：安全获取user_info（不存在则返回空字典）
-        user_info = st.session_state.get("user_info", {})
-        # 第二步：安全获取username（不存在则返回空字符串）
-        username = user_info.get("username", "")
-        # 第三步：优先用username，无则用session_id，最终兜底为随机字符串
-        if username:
-            user_id = username
-        else:
-            # 兼容Streamlit不同版本的session_id获取方式
-            user_id = getattr(st.session_state, "session_id", f"guest_{random.randint(1000, 9999)}")
-        
-        # 最终赋值，确保不会出现属性错误
-        st.session_state.user_identifier = user_id
-
-    # ==================== 核心CSS（优化） ====================
+    # ==================== 会话状态初始化（核心修复：全量兜底） ====================
+    # 初始化所有必要的会话状态，确保不存在的属性不会报错
+    def init_session_state():
+        """统一初始化会话状态，避免AttributeError"""
+        # 临时发布数据
+        if "tree_hole_temp" not in st.session_state:
+            st.session_state.tree_hole_temp = {
+                "content": "", "emotion_tag": "焦虑", "nickname": "", "images": []
+            }
+        # 敏感词列表
+        if "tree_hole_sensitive" not in st.session_state:
+            st.session_state.tree_hole_sensitive = []
+        # 管理员状态（核心修复：确保一定初始化）
+        if "is_admin" not in st.session_state:
+            st.session_state.is_admin = False
+        # 用户唯一标识（核心修复：更健壮的兜底）
+        if "user_identifier" not in st.session_state:
+            # 分步获取，层层兜底
+            user_info = st.session_state.get("user_info", {})  # 不存在则返回空字典
+            username = user_info.get("username", "")           # 不存在则返回空字符串
+            
+            if username:
+                user_id = username
+            else:
+                # 兼容不同Streamlit版本的session_id获取
+                try:
+                    user_id = st.session_state.session_id
+                except AttributeError:
+                    # 终极兜底：随机生成
+                    user_id = f"guest_{random.randint(100000, 999999)}"
+            
+            st.session_state.user_identifier = user_id
+    
+    # 立即执行初始化
+    init_session_state()
+    
+    # ==================== 核心CSS ====================
     st.markdown("""
     <style>
     .stApp > header { display: none !important; }
@@ -3030,23 +3043,23 @@ with tool6:
     .stFileUploader { margin-bottom: 6px !important; }
     </style>
     """, unsafe_allow_html=True)
-
+    
     # ==================== 页面主体 ====================
     st.markdown('<div class="tree-hole-container">', unsafe_allow_html=True)
-
+    
     # 标题区
     st.markdown('<h2 style="color:#5a4b3c; text-align:center; margin:0 0 4px 0; font-size:20px;">🌳 工大情绪树洞</h2>', unsafe_allow_html=True)
     st.markdown('<p class="warm-text" style="text-align:center; margin:0 0 2px 0;">用善意倾诉，用温暖回应</p>', unsafe_allow_html=True)
     st.markdown('<p class="admin-tip">💡 请发表友善言论，良言一句三冬暖，恶语相向六月寒</p>', unsafe_allow_html=True)
     st.markdown("<hr style='margin:6px 0; border-color:#f0e9df;'>", unsafe_allow_html=True)
-
-    # 每次渲染都重新加载最新数据（关键修复）
+    
+    # 每次渲染都重新加载最新数据
     shared_data = load_shared_data()
-
-    # 调试信息
-    if st.session_state.is_admin:
+    
+    # 调试信息（仅管理员可见）
+    if st.session_state.get("is_admin", False):  # 修复：使用get方法兜底
         st.markdown(f'<p class="admin-tip">🔧 管理员调试：当前共有 {len(shared_data["posts"])} 条帖子（实时同步）</p>', unsafe_allow_html=True)
-
+    
     # 暖心回应（优化：避免重复响应耗尽）
     def get_campus_response(emotion):
         responses = {
@@ -3084,7 +3097,7 @@ with tool6:
         # 获取对应情绪的回应列表
         all_res = responses.get(emotion, responses["其他"])
         # 过滤已使用的回应
-        unused = [r for r in all_res if r not in shared_data["responses_used"]]
+        unused = [r for r in all_res if r not in shared_data.get("responses_used", [])]  # 修复：get兜底
         
         # 若无未使用的，重置已使用列表
         if not unused:
@@ -3096,22 +3109,23 @@ with tool6:
         shared_data["responses_used"].append(res)
         save_shared_data(shared_data)
         return res
-
+    
     # 违规词检测（优化：空值处理）
     def check_sensitive_words(content):
         # 空内容直接返回无违规
         if not content or not isinstance(content, str):
             return False, None
         # 敏感词列表为空时直接返回无违规
-        if not st.session_state.tree_hole_sensitive:
+        sensitive_words = st.session_state.get("tree_hole_sensitive", [])  # 修复：get兜底
+        if not sensitive_words:
             return False, None
         # 检测违规词（不区分大小写）
         content_lower = content.lower()
-        for word in st.session_state.tree_hole_sensitive:
+        for word in sensitive_words:
             if word and word.lower() in content_lower:
                 return True, word
         return False, None
-
+    
     # 图片转base64（优化：异常处理）
     def image_to_base64(img):
         if img is None:
@@ -3127,37 +3141,41 @@ with tool6:
         except Exception as e:
             st.warning(f"图片处理失败: {str(e)}")
             return None
-
+    
     # 分栏布局
     col1, col2 = st.columns([1, 2], gap="medium")
-
-    # 左侧：发布区（核心修改：新增发布者身份绑定）
+    
+    # 左侧：发布区
     with col1:
         st.markdown('<div class="post-card">', unsafe_allow_html=True)
         st.markdown('<h4 style="color:#5a4b3c; margin-bottom:8px; font-size:15px;">✍️ 匿名倾诉</h4>', unsafe_allow_html=True)
         
+        # 修复：使用get方法获取会话状态，避免KeyError
+        temp_data = st.session_state.get("tree_hole_temp", {})
+        
         nickname = st.text_input(
             "✨ 匿名昵称（选填）", 
             placeholder="如：工大追梦人", 
-            value=st.session_state.tree_hole_temp["nickname"]
+            value=temp_data.get("nickname", "")
         )
         # 优化：昵称兜底更友好
-        st.session_state.tree_hole_temp["nickname"] = nickname if nickname.strip() else f"工大暖心人{len(shared_data['posts'])+1}"
+        temp_data["nickname"] = nickname if nickname.strip() else f"工大暖心人{len(shared_data['posts'])+1}"
+        st.session_state.tree_hole_temp = temp_data
         
         emotion_tag = st.selectbox(
             "💛 我的情绪", 
             ["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"], 
-            index=["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"].index(st.session_state.tree_hole_temp["emotion_tag"])
+            index=["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"].index(temp_data.get("emotion_tag", "焦虑"))
         )
-        st.session_state.tree_hole_temp["emotion_tag"] = emotion_tag
+        temp_data["emotion_tag"] = emotion_tag
         
         content = st.text_area(
             "💬 想说的话", 
             placeholder="在这里写下你的心情吧...\n可以搭配多张图片分享哦～", 
             height=100, 
-            value=st.session_state.tree_hole_temp["content"]
+            value=temp_data.get("content", "")
         )
-        st.session_state.tree_hole_temp["content"] = content
+        temp_data["content"] = content
         
         uploaded_files = st.file_uploader(
             "🖼️ 上传图片（可多选）", 
@@ -3176,7 +3194,7 @@ with tool6:
                     images.append(img)
                 except Exception as e:
                     st.warning(f"无法读取图片 {uploaded_file.name}: {str(e)}")
-            st.session_state.tree_hole_temp["images"] = images
+            temp_data["images"] = images
             # 预览图片
             if images:
                 st.markdown('<div class="post-images-grid">', unsafe_allow_html=True)
@@ -3184,7 +3202,7 @@ with tool6:
                     st.image(img, use_column_width=True, clamp=True)
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.session_state.tree_hole_temp["images"] = []
+            temp_data["images"] = []
         
         if st.button("🚀 把心情交给树洞", use_container_width=True, key="th_post"):
             # 校验：内容和图片至少有一个
@@ -3198,7 +3216,7 @@ with tool6:
                 else:
                     # 处理图片转base64
                     images_b64 = []
-                    for img in st.session_state.tree_hole_temp["images"]:
+                    for img in temp_data.get("images", []):
                         b64 = image_to_base64(img)
                         if b64:
                             images_b64.append(b64)
@@ -3206,7 +3224,7 @@ with tool6:
                     # 构造帖子数据
                     post_data = {
                         "id": len(shared_data["posts"])+1,
-                        "nickname": st.session_state.tree_hole_temp["nickname"],
+                        "nickname": temp_data.get("nickname", f"工大暖心人{len(shared_data['posts'])+1}"),
                         "emotion": emotion_tag,
                         "content": content.strip(),
                         "images": images_b64,
@@ -3214,8 +3232,7 @@ with tool6:
                         "like_count": 0,
                         "comments": [],
                         "response": get_campus_response(emotion_tag),
-                        # 核心新增：绑定发布者唯一标识（用户ID/会话ID）
-                        "publisher_id": st.session_state.user_identifier
+                        "publisher_id": st.session_state.get("user_identifier", f"guest_{random.randint(100000, 999999)}")
                     }
                     
                     # 保存帖子
@@ -3232,8 +3249,8 @@ with tool6:
                     # 重新加载页面
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
-    # 右侧：展示区（核心修改：删除权限校验）
+    
+    # 右侧：展示区
     with col2:
         st.markdown('<h4 style="color:#5a4b3c; margin-bottom:4px; font-size:15px;">🌟 树洞回音</h4>', unsafe_allow_html=True)
         st.markdown('<p class="warm-text">看看工大伙伴们的暖心分享～</p>', unsafe_allow_html=True)
@@ -3241,9 +3258,9 @@ with tool6:
         filter_emotion = st.selectbox("筛选情绪", ["全部"] + ["焦虑", "难过", "烦躁", "迷茫", "孤独", "其他"], label_visibility="collapsed")
         
         # 每次都从最新的 shared_data 取帖子
-        posts = shared_data["posts"][::-1]  # 倒序展示（最新的在前）
+        posts = shared_data.get("posts", [])[::-1]  # 修复：get兜底
         if filter_emotion != "全部":
-            posts = [p for p in posts if p["emotion"] == filter_emotion]
+            posts = [p for p in posts if p.get("emotion") == filter_emotion]  # 修复：get兜底
         
         if len(posts) == 0:
             st.markdown('<div class="empty-tip">', unsafe_allow_html=True)
@@ -3257,31 +3274,36 @@ with tool6:
                 # 帖子头部
                 post_head1, post_head2, post_head3 = st.columns([3, 1, 1])
                 with post_head1:
-                    st.markdown(f'<span style="color:#5a4b3c; font-weight:500;">{post["nickname"]}</span> '
-                                f'<span style="color:#948675; font-size:11px; background:#f0e9df; padding:2px 5px; border-radius:3px;">📌 {post["emotion"]}</span>',
+                    nickname = post.get("nickname", "匿名用户")
+                    emotion = post.get("emotion", "其他")
+                    st.markdown(f'<span style="color:#5a4b3c; font-weight:500;">{nickname}</span> '
+                                f'<span style="color:#948675; font-size:11px; background:#f0e9df; padding:2px 5px; border-radius:3px;">📌 {emotion}</span>',
                                 unsafe_allow_html=True)
                 with post_head2:
-                    st.markdown(f'<span style="color:#a89988; font-size:10px; text-align:right; display:block;">{post["create_time"]}</span>',
+                    create_time = post.get("create_time", "未知时间")
+                    st.markdown(f'<span style="color:#a89988; font-size:10px; text-align:right; display:block;">{create_time}</span>',
                                 unsafe_allow_html=True)
-                # 核心修改1：帖子删除权限校验
+                # 帖子删除权限校验
                 with post_head3:
                     # 管理员：可删除所有帖子；普通用户：仅能删除自己发布的帖子
                     can_delete_post = False
-                    if st.session_state.is_admin:
+                    if st.session_state.get("is_admin", False):
                         can_delete_post = True
                     else:
-                        # 检查当前用户是否是帖子发布者（兼容旧数据：无publisher_id则不可删除）
-                        can_delete_post = post.get("publisher_id") == st.session_state.user_identifier
+                        # 检查当前用户是否是帖子发布者
+                        publisher_id = post.get("publisher_id", "")
+                        user_identifier = st.session_state.get("user_identifier", "")
+                        can_delete_post = publisher_id == user_identifier
                     
                     if can_delete_post:
                         st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
-                        if st.button("🗑️ 删除", key=f"del_post_{post['id']}", use_container_width=True):
-                            # 重新加载最新数据，再删除，避免索引错位
+                        if st.button("🗑️ 删除", key=f"del_post_{post.get('id', post_idx)}", use_container_width=True):
+                            # 重新加载最新数据，再删除
                             shared_data = load_shared_data()
-                            # 找到原数组中的索引（因为展示时是倒序，需反向查找）
+                            # 找到原数组中的索引
                             original_idx = None
                             for i, p in enumerate(shared_data["posts"]):
-                                if p["id"] == post["id"]:
+                                if p.get("id") == post.get("id"):
                                     original_idx = i
                                     break
                             if original_idx is not None:
@@ -3305,20 +3327,21 @@ with tool6:
                     st.markdown('</div>', unsafe_allow_html=True)
                 
                 # 暖心回应
+                response = post.get("response", "工大永远是你的温柔港湾💛")
                 st.markdown(f'<div style="background:#f9f5f0; padding:6px; border-radius:8px; margin:6px 0;">'
                             f'<span style="color:#7d6b57; font-size:11px;">💬 工大暖心回应：</span>'
-                            f'<span class="warm-text"> {post.get("response", "工大永远是你的温柔港湾💛")}</span>'
+                            f'<span class="warm-text"> {response}</span>'
                             f'</div>', unsafe_allow_html=True)
                 
-                # 点赞（关键：先重新加载，再修改）
+                # 点赞
                 interact1, interact2 = st.columns([1,4])
                 with interact1:
                     like_count = post.get("like_count", 0)
-                    if st.button(f"❤️ {like_count}", key=f"th_like_{post['id']}", use_container_width=True):
+                    if st.button(f"❤️ {like_count}", key=f"th_like_{post.get('id', post_idx)}", use_container_width=True):
                         shared_data = load_shared_data()
                         # 找到对应帖子并点赞
                         for p in shared_data["posts"]:
-                            if p["id"] == post["id"]:
+                            if p.get("id") == post.get("id"):
                                 p["like_count"] = p.get("like_count", 0) + 1
                                 break
                         save_shared_data(shared_data)
@@ -3326,9 +3349,9 @@ with tool6:
                 with interact2:
                     comment_col1, comment_col2 = st.columns([4,1])
                     with comment_col1:
-                        comment = st.text_input("留下你的鼓励～", placeholder="如：加油！一切都会好起来的✨", key=f"th_comment_{post['id']}", label_visibility="collapsed")
+                        comment = st.text_input("留下你的鼓励～", placeholder="如：加油！一切都会好起来的✨", key=f"th_comment_{post.get('id', post_idx)}", label_visibility="collapsed")
                     with comment_col2:
-                        if st.button("发送", key=f"th_send_{post['id']}", use_container_width=True):
+                        if st.button("发送", key=f"th_send_{post.get('id', post_idx)}", use_container_width=True):
                             if comment.strip():
                                 has_sensitive, word = check_sensitive_words(comment)
                                 if has_sensitive:
@@ -3336,14 +3359,13 @@ with tool6:
                                 else:
                                     shared_data = load_shared_data()
                                     for p in shared_data["posts"]:
-                                        if p["id"] == post["id"]:
+                                        if p.get("id") == post.get("id"):
                                             # 构造评论数据
                                             new_comment = {
                                                 "nickname": "工大暖心小伙伴",
                                                 "content": comment.strip(),
                                                 "time": datetime.datetime.now().strftime("%H:%M:%S"),
-                                                # 核心新增：绑定评论发布者唯一标识
-                                                "commenter_id": st.session_state.user_identifier
+                                                "commenter_id": st.session_state.get("user_identifier", "")
                                             }
                                             p["comments"].append(new_comment)
                                             break
@@ -3351,7 +3373,7 @@ with tool6:
                                     st.success("💖 你的鼓励已送达～")
                                     st.rerun()
                 
-                # 评论列表（核心修改2：评论删除权限校验）
+                # 评论列表
                 post_comments = post.get("comments", [])
                 if post_comments and len(post_comments) > 0:
                     st.markdown('<p class="warm-text" style="font-size:11px; margin-top:6px; font-weight:500;">📝 暖心评论：</p>', unsafe_allow_html=True)
@@ -3369,18 +3391,20 @@ with tool6:
                         with cmt_col2:
                             # 管理员：可删除所有评论；普通用户：仅能删除自己发布的评论
                             can_delete_cmt = False
-                            if st.session_state.is_admin:
+                            if st.session_state.get("is_admin", False):
                                 can_delete_cmt = True
                             else:
-                                # 检查当前用户是否是评论发布者（兼容旧数据：无commenter_id则不可删除）
-                                can_delete_cmt = c.get("commenter_id") == st.session_state.user_identifier
+                                # 检查当前用户是否是评论发布者
+                                commenter_id = c.get("commenter_id", "")
+                                user_identifier = st.session_state.get("user_identifier", "")
+                                can_delete_cmt = commenter_id == user_identifier
                             
                             if can_delete_cmt:
                                 st.markdown('<div class="admin-delete-btn">', unsafe_allow_html=True)
-                                if st.button("🗑️", key=f"del_cmt_{post['id']}_{c_idx}", use_container_width=True):
+                                if st.button("🗑️", key=f"del_cmt_{post.get('id', post_idx)}_{c_idx}", use_container_width=True):
                                     shared_data = load_shared_data()
                                     for p in shared_data["posts"]:
-                                        if p["id"] == post["id"] and c_idx < len(p["comments"]):
+                                        if p.get("id") == post.get("id") and c_idx < len(p.get("comments", [])):
                                             del p["comments"][c_idx]
                                             break
                                     save_shared_data(shared_data)
@@ -3388,5 +3412,5 @@ with tool6:
                                     st.rerun()
                                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-
+    
     st.markdown('</div>', unsafe_allow_html=True)
