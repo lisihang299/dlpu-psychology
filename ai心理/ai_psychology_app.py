@@ -1809,15 +1809,73 @@ with tab5:
                     st.markdown(f"- {service}")
         st.markdown("---")
 
+import streamlit as st
+import json
+import os
+
+# ===================== 新增：持久化存储核心函数 =====================
+# 定义存储文件路径
+PSYCHOLOGY_RESOURCES_FILE = "dlpu_psychology_resources.json"
+
+def init_persistent_storage():
+    """初始化持久化存储文件（如果不存在则创建）"""
+    if not os.path.exists(PSYCHOLOGY_RESOURCES_FILE):
+        default_data = {
+            "psychological_course": [],
+            "psychological_activity": [],
+            "psychological_test": [],
+            "online_resources": []
+        }
+        with open(PSYCHOLOGY_RESOURCES_FILE, "w", encoding="utf-8") as f:
+            json.dump(default_data, f, ensure_ascii=False, indent=4)
+
+def load_persistent_resources():
+    """从文件加载管理员发布的持久化资源"""
+    init_persistent_storage()
+    try:
+        with open(PSYCHOLOGY_RESOURCES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        st.error(f"加载资源失败：{e}")
+        return {
+            "psychological_course": [],
+            "psychological_activity": [],
+            "psychological_test": [],
+            "online_resources": []
+        }
+
+def save_persistent_resource(resource_type_key, new_resource):
+    """添加新资源到持久化文件"""
+    resources = load_persistent_resources()
+    if resource_type_key not in resources:
+        resources[resource_type_key] = []
+    resources[resource_type_key].append(new_resource)
+    with open(PSYCHOLOGY_RESOURCES_FILE, "w", encoding="utf-8") as f:
+        json.dump(resources, f, ensure_ascii=False, indent=4)
+
+def delete_persistent_resource(resource_type_key, idx):
+    """从持久化文件删除指定资源"""
+    resources = load_persistent_resources()
+    if resource_type_key in resources and len(resources[resource_type_key]) > idx:
+        resources[resource_type_key].pop(idx)
+        with open(PSYCHOLOGY_RESOURCES_FILE, "w", encoding="utf-8") as f:
+            json.dump(resources, f, ensure_ascii=False, indent=4)
+        return True
+    return False
+
+# ===================== 原有代码 + 持久化改造 =====================
 with tab6:
     # 标签页6：学校咨询服务（包含严格的权限控制）
     st.title("🏫 大连工业大学 心理咨询服务指南")
     st.markdown("#### 了解学校的心理咨询服务，获取专业的心理支持")
     st.markdown("---")
     
+    # 初始化持久化存储（确保文件存在）
+    init_persistent_storage()
+    
     # 显示当前用户权限状态
     if is_admin():
-        st.success("👑 管理员模式：您可以管理所有心理资源")
+        st.success("👑 管理员模式：您可以管理所有心理资源（修改会同步到所有设备）")
     else:
         st.info("👤 游客模式：您只能查看心理资源内容")
     
@@ -1861,7 +1919,7 @@ with tab6:
     
     st.markdown("---")
     
-    # 校园心理资源（严格的权限控制）
+    # 校园心理资源（严格的权限控制 + 持久化存储）
     st.markdown("### 📚 校园心理资源")
     
     # 资源类型选择
@@ -1881,9 +1939,12 @@ with tab6:
     # 获取对应的键
     resource_type_key = [k for k, v in resource_types.items() if v == resource_type_to_manage][0]
     
+    # 加载持久化资源（所有设备共享）
+    persistent_resources = load_persistent_resources()
+    
     # 只有管理员才能看到资源管理功能
     if is_admin():
-        st.markdown("#### 📝 资源管理（管理员专属）")
+        st.markdown("#### 📝 资源管理（管理员专属，修改同步所有设备）")
         
         # 添加资源表单
         with st.form("add_resource_form", clear_on_submit=True):
@@ -1899,30 +1960,29 @@ with tab6:
                 clear_form = st.form_submit_button("🗑️ 清空内容", use_container_width=True)
             
             if submit_add and new_resource.strip():
-                # 添加资源到自定义资源列表
-                if resource_type_key not in st.session_state.custom_psychology_resources:
-                    st.session_state.custom_psychology_resources[resource_type_key] = []
-                st.session_state.custom_psychology_resources[resource_type_key].append(new_resource)
-                st.success("✅ 资源添加成功！")
+                # 保存到持久化文件（核心修改：替换session_state为文件存储）
+                save_persistent_resource(resource_type_key, new_resource)
+                st.success("✅ 资源添加成功！已同步到所有设备")
                 st.rerun()
         
         st.markdown("---")
         
         # 显示自定义资源（管理员可以管理）
-        st.markdown("#### 🔧 自定义资源管理")
-        if (resource_type_key in st.session_state.custom_psychology_resources and 
-            st.session_state.custom_psychology_resources[resource_type_key]):
-            
-            for idx, resource in enumerate(st.session_state.custom_psychology_resources[resource_type_key]):
+        st.markdown("#### 🔧 自定义资源管理（所有设备共享）")
+        current_resources = persistent_resources.get(resource_type_key, [])
+        if current_resources:
+            for idx, resource in enumerate(current_resources):
                 col_content, col_delete = st.columns([5, 1])
                 with col_content:
                     st.markdown(f"🔹 {resource}")
                 with col_delete:
                     if st.button("🗑️ 删除", key=f"delete_{resource_type_key}_{idx}"):
-                        # 删除资源
-                        st.session_state.custom_psychology_resources[resource_type_key].pop(idx)
-                        st.success("✅ 资源已删除！")
-                        st.rerun()
+                        # 从持久化文件删除（核心修改）
+                        if delete_persistent_resource(resource_type_key, idx):
+                            st.success("✅ 资源已删除！所有设备同步更新")
+                            st.rerun()
+                        else:
+                            st.error("❌ 删除失败，请重试")
         else:
             st.info(f"暂无自定义{resource_type_to_manage}，请添加")
     else:
@@ -1932,20 +1992,15 @@ with tab6:
     
     st.markdown("---")
     
-    # 显示完整的资源列表（所有用户可见）
+    # 显示完整的资源列表（所有用户可见，加载持久化数据）
     st.markdown(f"#### 📋 完整的{resource_type_to_manage}列表")
     
-    combined_resources = get_combined_resources()
-    all_resources = combined_resources[resource_type_key]
+    # 替换原有session_state逻辑，加载持久化资源
+    all_resources = persistent_resources.get(resource_type_key, [])
     
     if all_resources:
         for resource in all_resources:
-            # 标记自定义资源
-            is_custom = (resource_type_key in st.session_state.custom_psychology_resources and 
-                        resource in st.session_state.custom_psychology_resources[resource_type_key])
-            icon = "🔹" if is_custom else "📌"
-            label = "（管理员添加）" if is_custom else "（系统内置）"
-            st.markdown(f"{icon} {resource} {label}")
+            st.markdown(f"🔹 {resource}（管理员发布，所有设备可见）")
     else:
         st.info(f"暂无{resource_type_to_manage}内容")
     
